@@ -1,0 +1,110 @@
+NetGuard-XAI — Build Prompt for Antigravity
+Paste this whole document into Antigravity as the task brief. It is written to be executed phase by phase — do not let the agent jump straight to a full end-to-end scaffold; each phase must produce real, verified artifacts before the next one starts.
+0. Non-negotiable ground rules (read first, apply to every phase)
+No hardcoded or fabricated results, ever. Every number that appears in a log, a report, a dashboard, or a chat summary (accuracy, F1, risk score, reward, latency) must come from an actual executed run against real data, with the code and output saved. If a metric can't be computed yet, say so explicitly — do not fill in a plausible-looking placeholder.
+Verify, don't assume, the data. Before writing any preprocessing or model code, load the real UNSW-NB15 CSVs and print: shape, dtypes, column names, class distribution (attack_cat value counts), and null/inf counts. Use those actual numbers everywhere downstream — do not assume "49 features" means 49 model inputs. The raw file has 49 columns including identifiers (srcip, sport, dstip, dsport, stime, ltime) and the two target columns (label, attack_cat) — these are dropped or handled separately, not fed to the models. Report the true final feature count after cleaning.
+Freeze the official train/test split. Use UNSW_NB15_training-set.csv (175,341 rows) and UNSW_NB15_testing-set.csv (82,332 rows) exactly as published. Never touch the test set until final evaluation of a phase. Derive validation data only from the training set (e.g. stratified 80/20 split or k-fold).
+Every phase ends with a checkpoint. After each phase, produce: (a) the code, (b) a results file with real metrics, (c) a 3–5 sentence honest summary of what worked, what didn't, and what's still unverified. Do not proceed to the next phase until this checkpoint exists.
+Use the browser subagent to verify, not just to render. Any time a dashboard or UI is built, actually open it, interact with it, and confirm the numbers displayed match the numbers in the incident database / model logs. A UI that "looks right" but shows stale or mocked values is a failed phase.
+Scientific honesty in every write-up. Never claim "prevents zero-day attacks." The correct claim is: detection and adaptive containment of attack behavior withheld from supervised training. State this explicitly in any generated docs.
+1. Project identity
+Project: NetGuard-XAI — a real-time, closed-loop network intrusion detection and adaptive response system combining supervised detection, unsupervised anomaly detection, temporal behavioral analysis, a dynamic multi-signal risk engine, SHAP-based explainability, and a DQN reinforcement-learning response policy, evaluated for resilience against attack categories withheld from training.
+Research claim to actually test (not assert): A closed-loop system that fuses complementary detection signals (supervised, anomaly-based, behavioral) into an evolving risk estimate, and uses that risk plus uncertainty and temporal trend to drive an RL-based containment policy, can detect and adaptively contain network attack behavior that was never seen during supervised training — better than a static-threshold or rule-based baseline.*
+Dataset: UNSW-NB15 (official train/test CSVs from the UNSW Canberra Cyber Range Lab release — 2,540,044 total records across 4 raw capture files, 175,341/82,332 official train/test split, 9 attack categories + Normal).
+Target repo name: NetGuard-XAI (GitHub: Shivanshtripathi03/NetGuard-XAI, consistent with prior projects).
+2. Tech stack (pin these — don't let the agent freelance)
+Python 3.11, uv or venv for env management
+Modeling: xgboost, torch (Autoencoder + LSTM/GRU), scikit-learn for preprocessing/metrics
+Explainability: shap
+RL: stable-baselines3 (DQN) with a custom gymnasium environment
+Serving: FastAPI per microservice
+Orchestration: docker-compose (local "cloud-style" microservices — see note below)
+Storage: PostgreSQL for the incident database (SQLite acceptable for local dev/demo)
+Dashboard: React + a charting lib (or Streamlit if you want faster iteration over polish — pick one and justify it in the README, don't do both)
+Experiment tracking: plain structured JSON/CSV run logs is fine; MLflow optional if it doesn't eat the whole timeline
+Note on "cloud": default to Docker Compose microservices matching the architecture (ingestion, feature, xgboost, autoencoder, lstm, risk, xai, rl, incident-db, dashboard) running locally/on a single VM. This satisfies "cloud-based" as a microservice architecture without requiring you to actually provision AWS/GCP infra during a capstone timeline. If you later want real cloud deployment, the containers should already be portable — flag this as a stretch goal, not a Phase requirement.
+3. Phased build plan
+Phase 1 — Data pipeline (foundation, nothing else depends on shortcuts here)
+Dataset source (use this exactly, don't substitute a random Kaggle re-upload without checking it matches): official page is https://research.unsw.edu.au/projects/unsw-nb15-dataset, maintained by Dr Nour Moustafa (UNSW Canberra). The full source (pcap/BRO/Argus/CSV files) is distributed via a UNSW SharePoint link on that page — this typically requires a manual browser download (large files, personal SharePoint share), so: use the browser subagent to navigate there and download UNSW_NB15_training-set.csv and UNSW_NB15_testing-set.csv (the official pre-split files), plus UNSW-NB15_features.csv (feature descriptions) and the four raw UNSW-NB15_1-4.csv files only if you need the full 2,540,044-record pool rather than the official split. If direct download fails in-agent, stop and ask the user to download manually and drop the files into data/raw/ — don't silently substitute a different dataset.
+Citation requirement: the dataset's academic-use license requires citing Moustafa & Slay's 2015 MilCIS paper ("UNSW-NB15: a comprehensive data set for network intrusion detection systems") and related papers listed on the official page. Add a CITATION.md to the repo with these references — this is a real license condition, not optional flavor text for the report.
+Print and save real dataset diagnostics (shape, dtypes, class balance per split, null/inf counts).
+Clean: drop identifier columns, handle nulls/infs, verify no leakage of label/attack_cat into features.
+Encode categorical features (proto, service, state) — justify the encoding choice (target/frequency encoding for XGBoost is fine; one-hot or embeddings may be needed for the neural models — these can differ per model, document why).
+Normalize features separately for the Autoencoder/LSTM/RL pipelines (tree models don't need it).
+Handle class imbalance with class weights and/or careful resampling — resampling must happen after the train/val split, never before (leakage check required, show the code that proves it).
+Checkpoint: a data_report.md with real distributions, and cleaned train/val/test artifacts saved to disk.
+Phase 2 — Detection models (train independently, freeze each)
+For each model below, follow this exact procedure and save artifacts at each step — don't skip straight to "train and report a number":
+XGBoost (known-attack classifier):
+Carve a stratified validation split (e.g. 80/20) from the training CSV only — test CSV stays untouched.
+Baseline train with default hyperparameters, log baseline metrics.
+Hyperparameter search (grid or optuna) over max_depth, learning_rate, n_estimators, subsample, scale_pos_weight (for imbalance) — evaluated only on the validation split.
+Retrain final model on full training data with best params, save the model file (.json/.ubj).
+Evaluate once on the real test CSV: precision/recall/F1 per class, macro-F1, ROC-AUC, PR-AUC, confusion matrix. Save as xgboost_test_metrics.json.
+Autoencoder (anomaly detector):
+Filter training data to Normal-only rows, normalize (fit scaler on this subset only, save the scaler).
+Train a symmetric encoder-decoder (start simple: a few dense layers, latent dim ~half of input dim) with reconstruction loss (MSE), early stopping on a held-out slice of normal validation data.
+Compute reconstruction error distribution on held-out normal validation data; set the anomaly threshold at a chosen percentile (e.g. 95th/99th) of that distribution — document the percentile chosen and why.
+Evaluate on the real test CSV (normal + all attack rows): detection rate, FPR, AUROC/AUPRC using reconstruction error as the anomaly score. Save autoencoder_test_metrics.json.
+LSTM/GRU (behavioral model):
+Build sequences by grouping rows on a real key (e.g. srcip + a rolling time window) and ordering by timestamp — write and save the exact grouping code, since this determines whether the "sequence" claim is legitimate.
+Label each sequence (e.g. sequence is anomalous if its last event is an attack, or use a windowed multi-label scheme — pick one, document it).
+Train with an appropriate loss for the chosen labeling scheme, early stopping on a validation split of sequences (not raw rows) to avoid leaking the same source host across train/val.
+Evaluate on test-derived sequences: report real behavioral-deviation detection metrics, save lstm_test_metrics.json.
+Checkpoint: three frozen model artifacts (xgboost_model.json, autoencoder.pt + scaler, lstm.pt) + a combined metrics table comparing all three on the real test set, with confusion matrices, saved to results/phase2_metrics.md.
+Phase 3 — Uncertainty, risk engine, explainability
+Uncertainty: pick one defensible method (e.g. ensemble/MC-dropout variance, or simple agreement-based disagreement score across the three models) and implement it — don't invent an unjustified "uncertainty number."
+Risk engine: implement R_t = f(P_t, A_t, B_t, S_t, H_t, U_t, C_t) as actual code with a documented functional form (even a weighted/logistic combination is fine — the point is it's real and tunable, not a black box). Implement historical risk decay and risk trajectory (ΔR_t, V_t) as stateful, testable functions with unit tests using synthetic event sequences.
+SHAP: real SHAP values computed on the XGBoost model for actual test predictions, surfaced as top contributing features per incident.
+Checkpoint: given a sequence of real test-set events run through the pipeline, produce an actual risk trajectory plot and SHAP explanation for at least 5 real incidents (mix of true attacks and false positives).
+Phase 4 — RL environment and adaptive response
+Define the environment (NetGuardSecurityEnv, gymnasium.Env subclass):
+observation_space: the real state vector [P, A, B, R, U, ΔR, H, C] computed from the frozen Phase 2/3 models on actual UNSW rows — not placeholder floats.
+action_space: Discrete(5) mapping to Allow, Monitor, RateLimit, Block, Isolate.
+reset(): start a new episode by sampling a real ordered sequence of training-set events (reuse the LSTM's sequence-construction logic from Phase 2 for consistency).
+step(action): given the current real event's true label (attack/normal, known from the dataset), compute the reward using the reward table below, advance to the next event in the episode, and return (next_state, reward, terminated, truncated, info).
+Reward table (starting values — implement as a named constants dict, not magic numbers, and log that these are tunable):
+correctly allow benign: +5, correctly monitor suspicious: +5, correctly contain attack (block/isolate on a true attack): +15, unnecessary rate-limit on benign: −8, false-positive block on benign: −20, serious attack allowed through: −30, unnecessary isolation on benign: −25.
+Train DQN (stable_baselines3.DQN) on the training-derived environment only:
+Use experience replay buffer, target network updates, ε-greedy schedule (log the decay schedule used), a fixed discount factor (e.g. 0.99), and mini-batch updates.
+Log real training curves: episode reward, episode length, loss — save as results/dqn_training_curve.png plus the raw CSV of logged values (no illustrative/smoothed-only curves without the raw data backing them).
+Evaluate the frozen policy on test-set-derived episodes (never seen during DQN training): report attack containment rate, false-positive intervention rate, average reward, response latency.
+Checkpoint: a trained DQN policy file + real training curves (raw CSV + plot) + a table of "state → chosen action → actual outcome" for a sample of real test episodes, saved to results/phase4_rl_eval.md.
+Phase 5 — Zero-day / unseen-attack experiments
+Categories to hold out — this is decided, not optional: Reconnaissance (10,491 train / 3,496 test) and Fuzzers (18,184 / 6,062) are removed from training/validation entirely and used only for the unseen-attack test. Everything else — Normal, Exploits, Generic, DoS, Analysis, Backdoor, Shellcode, Worms — stays in training. Do not hold out Worms (44 test rows) or Shellcode (378 test rows): too few samples for the recall/F1 number to mean anything. Do not hold out Exploits or Generic either, even though they're large enough: removing 19–23% of training data changes the class balance so much that a performance drop could just be "less data," not "unseen attack" — that confound undermines the whole experiment.
+Bonus scenario, only if Phases 1–5 finish with time to spare: repeat the same procedure holding out DoS (12,264 / 4,089) as a third confirmatory run. This is a stretch goal, not a requirement — don't let it delay Phase 6 onward.
+For each held-out category, build two dataset variants and keep them in clearly separate files — this is the part that's easy to get wrong:
+"Restricted" training data — the official training CSV with every row where attack_cat == <held-out category> removed. This is what all models train on for this experiment.
+"Restricted" validation data — same exclusion applied to whatever validation split you carve from training, so hyperparameter tuning never sees the category either.
+Test data stays the official test CSV, untouched — but split it into two evaluation views: (a) rows belonging only to the held-out category (this is your "genuinely unseen" test), and (b) all other rows (this is your normal test, to confirm restricting training didn't wreck baseline performance).
+What NOT to train on, per model, explicitly:
+XGBoost: must never see a row labeled with the held-out category, in training or in the validation split used for hyperparameter search. Verify by asserting held_out_category not in train_df['attack_cat'].unique() and same for the val split, before calling .fit().
+Autoencoder: already trains on Normal-only rows, so the held-out category isn't directly in its training data by construction — but the validation slice used to set the anomaly threshold must also be checked to confirm it contains no held-out-category rows if you ever include any attack traffic there for calibration.
+LSTM/GRU: any sequence where any event in the window belongs to the held-out category must be dropped from train/val sequence construction — not just sequences ending in that category. Write this filter explicitly and log how many sequences were dropped.
+DQN/RL: training episodes must be built only from the "restricted" training/validation event pool — an episode must not contain a single event from the held-out category, since the agent would otherwise learn a response to it indirectly.
+Leakage check (mandatory, run and log before "unseen" evaluation): assert zero rows/sequences/episodes containing the held-out category anywhere in any saved training artifact (train CSVs, sequence tensors, replay buffer contents). Save this assertion's output, not just a claim that it passed.
+Control baseline (to prove the gap is really about "unseen," not just difficulty): also train a "full-knowledge" version of the same pipeline on the unrestricted training data (category included). Evaluate it on the same held-out-category test rows. The difference between the full-knowledge model's performance and the restricted model's performance on those exact same rows is your actual unseen-attack detection gap — report this comparison explicitly, not just the restricted model's standalone numbers.
+Metrics to report per held-out scenario, on the held-out-only test rows specifically (not blended with the rest of the test set): recall, F1, FPR, mean risk score assigned, containment rate (did RL choose Block/Isolate), response latency — for both the restricted model and the full-knowledge control.
+Checkpoint: a results table across all held-out scenarios (restricted vs. full-knowledge control, on held-out rows only) with the honest finding stated in plain language — including if the gap is small or the system underperforms in some scenario. That's a valid and reportable result, not a failure to hide.
+Phase 6 — Comparative and ablation study
+Implement and actually run: System A (static threshold), System B (risk-based rule response), System C (full NetGuard-XAI with RL). Compare on the same test events.
+Ablation: Baseline (XGB only) → +AE → +LSTM → +Risk → +SHAP → +RL, each with real re-evaluated metrics.
+Checkpoint: one results table per comparison, generated from real runs, no estimated/interpolated numbers.
+Phase 7 — Services, dashboard, and end-to-end verification
+Wire the frozen models into the microservice architecture behind FastAPI, orchestrated with docker-compose.
+Incident database stores real event/risk/explanation/action/result records.
+Dashboard reads live from the incident database — no mocked fixtures in the shipped version.
+Verification requirement: use the browser subagent to load the dashboard, trigger a real simulated attack event through the pipeline, and confirm the displayed risk score, SHAP explanation, and RL action match what's actually in the incident database and model logs at that moment. Take a screenshot as evidence.
+Phase 8 — Final report
+Compile Phases 1–7's checkpoints into a final report: architecture diagram (regenerate from what was actually built, not the original plan, if they diverged), full metrics tables, honest limitations section, and the one-line project claim rewritten to match what was actually demonstrated.
+4. Definition of done
+ All models trained on real official UNSW-NB15 splits, no synthetic substitute data
+ Every metric in every report traceable to a saved run log
+ Zero-day experiments run on Reconnaissance + Fuzzers at minimum, with leakage checks shown
+ Ablation table complete with real numbers for every row
+ Dashboard verified against live backend via browser subagent screenshot
+ Final report states limitations honestly, avoids "prevents zero-day attacks" framing
+ Repo structured for a professor to clone, run docker-compose up, and reproduce at least the Phase 1–2 results
+
+
+ this is the dataset https://research.unsw.edu.au/projects/unsw-nb15-dataset?utm_source=chatgpt.com

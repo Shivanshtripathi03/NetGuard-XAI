@@ -1,0 +1,20 @@
+{
+  "model": "autoencoder",
+  "threshold_percentile": 95,
+  "anomaly_threshold": 0.04650504072687963,
+  "best_val_loss": 0.013554394990205765,
+  "test_roc_auc": 0.852555700167652,
+  "test_pr_auc": 0.8687245118166942,
+  "test_detection_rate": 0.5708770846201359,
+  "test_fpr": 0.09202702702702703,
+  "confusion_matrix": [
+    [
+      33595,
+      3405
+    ],
+    [
+      19453,
+      25879
+    ]
+  ]
+}
