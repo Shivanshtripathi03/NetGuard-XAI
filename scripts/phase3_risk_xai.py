@@ -8,13 +8,25 @@ import os
 import sys
 import json
 import pickle
+import warnings
+warnings.filterwarnings('ignore')   # suppress sklearn feature-name warnings
+
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
+
 import numpy as np
 import pandas as pd
+import torch
+torch.set_num_threads(1)
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.stdout.reconfigure(line_buffering=True)  # force line-buffered stdout
 
 MODELS_DIR  = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models")
 RESULTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "results")
@@ -328,27 +340,38 @@ def main():
     lstm_model.eval()
 
     # Sample 200 sequential test events for risk trajectory demo
+    print("[RISK] Sampling 200 test events for risk trajectory...", flush=True)
     sample = test_df.sample(n=min(200, len(test_df)), random_state=42).reset_index(drop=True)
     engine = RiskEngine()
     events_risk_data = []
 
-    ae_scaler_test = ae_scaler.transform(sample[num_cols].values)
-    scaler_test = artifacts['scaler'].transform(sample[num_cols].values)
-    X_tree = sample[feature_cols]
+    # Use .values to avoid sklearn feature-name warnings that can stall output
+    sample_num_vals = sample[num_cols].values.astype(np.float32)
+    sample_tree_vals = sample[feature_cols].values.astype(np.float32)
 
+    print("[RISK] Running AE transform...", flush=True)
+    ae_scaler_test = ae_scaler.transform(sample_num_vals)
+    print("[RISK] Running general scaler transform...", flush=True)
+    scaler_test = artifacts['scaler'].transform(sample_num_vals)
+
+    print("[RISK] Running AE forward pass...", flush=True)
     with torch.no_grad():
         ae_input = torch.tensor(ae_scaler_test, dtype=torch.float32)
         ae_recon = ae_model(ae_input).numpy()
         ae_mse = np.mean((ae_scaler_test - ae_recon) ** 2, axis=1)
+    print(f"[RISK] AE done. mse range: {ae_mse.min():.6f}–{ae_mse.max():.6f}", flush=True)
 
-        # LSTM: need sequences — pad first seq_length events
-        padded = np.vstack([scaler_test[:seq_length], scaler_test])
-        X_seq_arr, _ = create_sequences(padded, np.zeros(len(padded)), seq_length)
-        X_seq_arr = X_seq_arr[:len(sample)]
+    # LSTM: need sequences — pad first seq_length events
+    print("[RISK] Running LSTM forward pass...", flush=True)
+    padded = np.vstack([scaler_test[:seq_length], scaler_test])
+    X_seq_arr, _ = create_sequences(padded, np.zeros(len(padded)), seq_length)
+    X_seq_arr = X_seq_arr[:len(sample)]
+    with torch.no_grad():
         lstm_probs = lstm_model(torch.tensor(X_seq_arr, dtype=torch.float32)).numpy()
+    print(f"[RISK] LSTM done. prob range: {lstm_probs.min():.4f}–{lstm_probs.max():.4f}", flush=True)
 
-    X_tree_arr = sample[feature_cols].values.astype(np.float32)
-    dmatrix_sample = xgb.DMatrix(X_tree_arr)
+    print("[RISK] Running XGBoost inference...", flush=True)
+    dmatrix_sample = xgb.DMatrix(sample_tree_vals)
     xgb_probs = xgb_model.predict(dmatrix_sample)
     print(f"[RISK] Evaluated {len(sample)} sample events across 3 models.", flush=True)
 

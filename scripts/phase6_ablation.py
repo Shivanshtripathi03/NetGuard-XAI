@@ -6,14 +6,20 @@ Ablation: XGB → +AE → +LSTM → +Risk → +SHAP → +RL
 
 import os
 import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import json
 import pickle
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
 
 import torch
+torch.set_num_threads(1)
 from sklearn.metrics import f1_score, recall_score, precision_score, roc_auc_score
 import xgboost as xgb
 
