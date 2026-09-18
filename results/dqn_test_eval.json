@@ -1,0 +1,11 @@
+{
+  "n_episodes": 50,
+  "total_steps": 5000,
+  "attack_containment_rate": 0.9863157894736843,
+  "false_positive_intervention_rate": 0.27516129032258063,
+  "average_reward": 4.405,
+  "action_distribution": {
+    "Block": 2727,
+    "Monitor": 2273
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "held_out_categories": [
+    "Reconnaissance",
+    "Fuzzers"
+  ],
+  "restricted_train_rows": 117332,
+  "restricted_val_rows": 29334,
+  "leakage_status": "PASSED \u2014 0 held-out rows in restricted train/val"
+}

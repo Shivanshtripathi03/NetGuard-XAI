@@ -1,0 +1,63 @@
+{
+  "system_comparison": {
+    "System A (Static Threshold)": {
+      "recall": 0.9682123003617753,
+      "precision": 0.8645747153606744,
+      "f1": 0.913463339507586,
+      "macro_f1": 0.8960893689049758,
+      "roc_auc": 0.9833032506719195
+    },
+    "System B (Risk-Rule)": {
+      "recall": 0.9486896673431572,
+      "precision": 0.9515443844588016,
+      "f1": 0.9501148815835985,
+      "macro_f1": 0.9445925064978355,
+      "roc_auc": 0.9881047705034498
+    },
+    "System C (NetGuard-XAI+RL)": {
+      "containment_rate": 0.9863157894736843,
+      "fp_rate": 0.27516129032258063,
+      "avg_reward": 4.405,
+      "note": "RL policy result from Phase 4 evaluation"
+    }
+  },
+  "ablation_study": {
+    "1_XGBoost_only": {
+      "recall": 0.9682123003617753,
+      "precision": 0.8645747153606744,
+      "f1": 0.913463339507586,
+      "macro_f1": 0.8960893689049758,
+      "roc_auc": 0.9833032506719195
+    },
+    "2_XGB_plus_AE": {
+      "recall": 0.9754257478161122,
+      "precision": 0.8322135019667627,
+      "f1": 0.8981465495353679,
+      "macro_f1": 0.8733243963858353
+    },
+    "3_XGB_AE_LSTM": {
+      "recall": 0.9923894820435896,
+      "precision": 0.7501959411009389,
+      "f1": 0.8544620556700443,
+      "macro_f1": 0.7981175090387898
+    },
+    "4_plus_Risk_Engine": {
+      "recall": 0.9486896673431572,
+      "f1": 0.9501148815835985,
+      "macro_f1": 0.9445925064978355,
+      "roc_auc": 0.9881047705034498
+    },
+    "5_plus_SHAP": {
+      "recall": 0.9486896673431572,
+      "f1": 0.9501148815835985,
+      "macro_f1": 0.9445925064978355,
+      "roc_auc": 0.9881047705034498,
+      "note": "SHAP adds explainability per incident; detection metrics unchanged from step 4"
+    },
+    "6_full_NetGuard_XAI_RL": {
+      "containment_rate": 0.9863157894736843,
+      "fp_rate": 0.27516129032258063,
+      "note": "RL optimizes action policy, not raw detection \u2014 see Phase 4 for eval details"
+    }
+  }
+}

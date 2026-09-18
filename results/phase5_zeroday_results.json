@@ -1,0 +1,30 @@
+{
+  "held_out_categories": [
+    "Reconnaissance",
+    "Fuzzers"
+  ],
+  "restricted_model": {
+    "tag": "restricted",
+    "n_eval_events": 9549,
+    "recall": 0.42548958006073934,
+    "f1": 0.5969732588892154,
+    "fpr": 0.0,
+    "roc_auc": null,
+    "mean_risk_score": 0.42302602205074624,
+    "containment_rate": 0.42548958006073934
+  },
+  "full_knowledge_model": {
+    "tag": "full_knowledge",
+    "n_eval_events": 9549,
+    "recall": 0.7885642475651901,
+    "f1": 0.8817846478131038,
+    "fpr": 0.0,
+    "roc_auc": null,
+    "mean_risk_score": 0.5939328055395277,
+    "containment_rate": 0.7885642475651901
+  },
+  "gap_recall": 0.3630746675044507,
+  "gap_f1": 0.28481138892388846,
+  "gap_containment": 0.3630746675044507,
+  "honest_finding": "Difference in Recall between full-knowledge and restricted pipeline on held-out ['Reconnaissance', 'Fuzzers'] test rows: +0.3631. This represents the true unseen-attack detection gap. The anomaly-based and behavioral components (AE + LSTM) provide partial detection even without supervised training on these categories."
+}

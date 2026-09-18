@@ -6,6 +6,17 @@ No mocked fixtures — all data comes from real model runs.
 
 import os
 import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
+
+import torch
+torch.set_num_threads(1)
+
 import json
 import pickle
 import numpy as np
@@ -17,8 +28,6 @@ from datetime import datetime, timedelta
 import requests
 import time
 import threading
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Page Config

@@ -1,0 +1,242 @@
+[
+  {
+    "index": 1,
+    "true_label": 1,
+    "predicted_label": 1,
+    "attack_cat": "Generic",
+    "top_shap_features": [
+      {
+        "feature": "ct_dst_sport_ltm",
+        "shap_value": 3.3084700107574463
+      },
+      {
+        "feature": "sttl",
+        "shap_value": 2.098750352859497
+      },
+      {
+        "feature": "sbytes",
+        "shap_value": 1.3401644229888916
+      },
+      {
+        "feature": "service_enc",
+        "shap_value": 0.8510749936103821
+      },
+      {
+        "feature": "smean",
+        "shap_value": 0.7178820967674255
+      },
+      {
+        "feature": "rate",
+        "shap_value": 0.35404643416404724
+      },
+      {
+        "feature": "ct_src_ltm",
+        "shap_value": 0.2895472049713135
+      },
+      {
+        "feature": "dtcpb",
+        "shap_value": 0.24748709797859192
+      },
+      {
+        "feature": "ct_src_dport_ltm",
+        "shap_value": 0.2051919847726822
+      },
+      {
+        "feature": "sloss",
+        "shap_value": 0.18745432794094086
+      }
+    ]
+  },
+  {
+    "index": 2,
+    "true_label": 1,
+    "predicted_label": 1,
+    "attack_cat": "Generic",
+    "top_shap_features": [
+      {
+        "feature": "ct_dst_sport_ltm",
+        "shap_value": 3.719017744064331
+      },
+      {
+        "feature": "sttl",
+        "shap_value": 2.0848450660705566
+      },
+      {
+        "feature": "ct_srv_src",
+        "shap_value": -1.5792291164398193
+      },
+      {
+        "feature": "sbytes",
+        "shap_value": 1.1522674560546875
+      },
+      {
+        "feature": "service_enc",
+        "shap_value": 1.1107536554336548
+      },
+      {
+        "feature": "ct_srv_dst",
+        "shap_value": 0.8775196075439453
+      },
+      {
+        "feature": "ct_dst_src_ltm",
+        "shap_value": 0.6310974359512329
+      },
+      {
+        "feature": "smean",
+        "shap_value": 0.6222936511039734
+      },
+      {
+        "feature": "ct_dst_ltm",
+        "shap_value": 0.5115967392921448
+      },
+      {
+        "feature": "ct_src_ltm",
+        "shap_value": 0.4646950960159302
+      }
+    ]
+  },
+  {
+    "index": 4,
+    "true_label": 1,
+    "predicted_label": 1,
+    "attack_cat": "Exploits",
+    "top_shap_features": [
+      {
+        "feature": "sttl",
+        "shap_value": 1.9593623876571655
+      },
+      {
+        "feature": "ct_srv_dst",
+        "shap_value": 0.7186821103096008
+      },
+      {
+        "feature": "ct_srv_src",
+        "shap_value": 0.5819647312164307
+      },
+      {
+        "feature": "dload",
+        "shap_value": 0.35998159646987915
+      },
+      {
+        "feature": "synack",
+        "shap_value": 0.344109445810318
+      },
+      {
+        "feature": "ct_dst_src_ltm",
+        "shap_value": 0.31016942858695984
+      },
+      {
+        "feature": "dur",
+        "shap_value": 0.2665788233280182
+      },
+      {
+        "feature": "tcprtt",
+        "shap_value": 0.22261784970760345
+      },
+      {
+        "feature": "rate",
+        "shap_value": 0.1382070779800415
+      },
+      {
+        "feature": "sinpkt",
+        "shap_value": 0.12519203126430511
+      }
+    ]
+  },
+  {
+    "index": 8,
+    "true_label": 0,
+    "predicted_label": 1,
+    "attack_cat": "Normal",
+    "top_shap_features": [
+      {
+        "feature": "sttl",
+        "shap_value": 1.7397617101669312
+      },
+      {
+        "feature": "ct_dst_src_ltm",
+        "shap_value": 0.6341182589530945
+      },
+      {
+        "feature": "sbytes",
+        "shap_value": -0.6284661293029785
+      },
+      {
+        "feature": "sjit",
+        "shap_value": 0.5293499231338501
+      },
+      {
+        "feature": "rate",
+        "shap_value": -0.24595224857330322
+      },
+      {
+        "feature": "ct_dst_sport_ltm",
+        "shap_value": -0.21290485560894012
+      },
+      {
+        "feature": "ct_srv_src",
+        "shap_value": 0.1946692168712616
+      },
+      {
+        "feature": "djit",
+        "shap_value": -0.18815743923187256
+      },
+      {
+        "feature": "dur",
+        "shap_value": -0.184763565659523
+      },
+      {
+        "feature": "smean",
+        "shap_value": 0.15257896482944489
+      }
+    ]
+  },
+  {
+    "index": 21,
+    "true_label": 1,
+    "predicted_label": 0,
+    "attack_cat": "Fuzzers",
+    "top_shap_features": [
+      {
+        "feature": "sttl",
+        "shap_value": 1.4261642694473267
+      },
+      {
+        "feature": "ct_srv_dst",
+        "shap_value": -1.167253017425537
+      },
+      {
+        "feature": "ct_srv_src",
+        "shap_value": -0.5812778472900391
+      },
+      {
+        "feature": "smean",
+        "shap_value": -0.5658382773399353
+      },
+      {
+        "feature": "sjit",
+        "shap_value": -0.21618317067623138
+      },
+      {
+        "feature": "ct_dst_sport_ltm",
+        "shap_value": -0.1935284584760666
+      },
+      {
+        "feature": "dtcpb",
+        "shap_value": 0.15914903581142426
+      },
+      {
+        "feature": "sload",
+        "shap_value": -0.1459447592496872
+      },
+      {
+        "feature": "ct_dst_src_ltm",
+        "shap_value": 0.13726870715618134
+      },
+      {
+        "feature": "rate",
+        "shap_value": 0.1052217185497284
+      }
+    ]
+  }
+]

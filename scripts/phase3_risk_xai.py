@@ -212,7 +212,7 @@ def compute_shap_explanations(n_incidents=5):
     sample_df = test_df.sample(n=min(2000, len(test_df)), random_state=42).reset_index(drop=True)
     X_test = sample_df[feature_cols].values.astype(np.float32)
     y_test = sample_df['label'].astype(int).values
-    dtest = xgb.DMatrix(X_test)
+    dtest = xgb.DMatrix(X_test, feature_names=feature_cols)
     y_probs = model.predict(dtest)
     y_pred = (y_probs > 0.5).astype(int)
 
@@ -371,7 +371,7 @@ def main():
     print(f"[RISK] LSTM done. prob range: {lstm_probs.min():.4f}–{lstm_probs.max():.4f}", flush=True)
 
     print("[RISK] Running XGBoost inference...", flush=True)
-    dmatrix_sample = xgb.DMatrix(sample_tree_vals)
+    dmatrix_sample = xgb.DMatrix(sample_tree_vals, feature_names=feature_cols)
     xgb_probs = xgb_model.predict(dmatrix_sample)
     print(f"[RISK] Evaluated {len(sample)} sample events across 3 models.", flush=True)
 

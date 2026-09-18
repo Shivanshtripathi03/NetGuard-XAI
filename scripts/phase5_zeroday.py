@@ -189,7 +189,7 @@ def evaluate_on_held_out(xgb_m, ae_m, ae_sc, ae_thr, lstm_m, lstm_sc,
     try:
         roc_auc = float(roc_auc_score(y_true_seq, risk_scores))
     except Exception:
-        roc_auc = float('nan')
+        roc_auc = None  # undefined when only one class present (JSON null, not NaN)
 
     return {
         "tag": tag,
