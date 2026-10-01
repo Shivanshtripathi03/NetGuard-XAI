@@ -52,11 +52,16 @@ app = FastAPI(
     version="2.0.0"
 )
 
+from fastapi.staticfiles import StaticFiles
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_credentials=True,
     allow_methods=["*"], allow_headers=["*"],
 )
+
+if os.path.isdir(RESULTS_DIR):
+    app.mount("/results", StaticFiles(directory=RESULTS_DIR), name="results")
 
 # ── Global caches ──
 _models: Dict[str, Any] = {}          # production (full) models

@@ -21,6 +21,7 @@ data/raw/
 data/processed/
 data/*.db
 data/netguard.db
+src/results
 
 # Trained model artifacts (large binaries — regenerate via run_pipeline.py)
 models/
