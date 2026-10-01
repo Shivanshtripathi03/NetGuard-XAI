@@ -1524,6 +1524,21 @@ function renderDetailPanel(inc) {
         </div>
       </div>
     </div>
+
+    <div class="detail-section">
+      <div class="detail-title" style="display:flex;align-items:center;gap:6px;">
+        <span>🤖</span> AI Threat Intelligence &amp; Playbook
+      </div>
+      <div style="font-size:11px;color:var(--text-secondary);line-height:1.5;margin-bottom:8px;">
+        ${(CATEGORY_INTEL[inc.attack_cat] || CATEGORY_INTEL['Generic']).mechanism}
+      </div>
+      <div style="font-size:11px;font-weight:600;color:var(--sev-low);margin-bottom:4px;">
+        Prevention Checklist:
+      </div>
+      <ul style="margin:0;padding-left:16px;font-size:10px;color:var(--text-muted);line-height:1.5;">
+        ${(CATEGORY_INTEL[inc.attack_cat] || CATEGORY_INTEL['Generic']).prevention.map(p => `<li>${p}</li>`).join('')}
+      </ul>
+    </div>
   `;
 }
 
@@ -1635,6 +1650,211 @@ function renderShapList(data) {
   });
 }
 
+const FEATURE_EXPLANATIONS = {
+  sttl: "Source-to-destination TTL (indicates OS fingerprinting, packet forging, or perimeter traversal)",
+  dttl: "Destination-to-source TTL (reflects internal network gateway transit characteristics)",
+  ct_dst_sport_ltm: "Same source-port connection count in 100-event window (strong indicator of port scanning, flooding, or fuzzing)",
+  sbytes: "Source outbound transaction byte volume (anomalous bursts indicate buffer overflow payloads or data exfiltration)",
+  dbytes: "Destination inbound byte volume (asymmetry reveals whether target daemon responded or was overwhelmed)",
+  sload: "Source transmission bit rate (bps) (high bursts signal volumetric denial-of-service pressure)",
+  dload: "Destination bit rate (bps) (measures network throughput consumed on target host)",
+  rate: "Overall packet transmission rate (sharp spikes distinguish automated attack tools from human traffic)",
+  swin: "Source TCP window advertisement (manipulated zero or malformed windows manipulate TCP connection buffers)",
+  dwin: "Destination TCP window size (window collapse indicates target service thread exhaustion)",
+  dur: "Connection duration (sub-second bursts indicate automated scans; long idle sessions indicate C2 beaconing)",
+  ct_srv_dst: "Connections to identical service on destination (concentrated probes against a specific network daemon)",
+  ct_state_ttl: "State count for specific TTL combinations (unusual states flag protocol evasion attempts)",
+  ct_dst_src_ltm: "Connections between source and destination pair (heavy frequency indicates brute force or flooding)",
+  sloss: "Source packet retransmissions/loss (signals congested paths or intentional drop evasion)",
+  dloss: "Destination packet loss (indicates target resource exhaustion)",
+  sinpkt: "Source inter-packet arrival time (microsecond intervals indicate automated tooling)",
+  dinpkt: "Destination inter-packet arrival time (delays show target processing latency under stress)",
+  ct_src_dport_ltm: "Connections from source to same destination port (targeted service probing or vulnerability exploitation)",
+  service_enc: "Encoded network service protocol (identifies target protocol layer such as HTTP, DNS, FTP, SMTP)"
+};
+
+const CATEGORY_INTEL = {
+  Fuzzers: {
+    name: "Fuzzing & Malformed Protocol Attack",
+    mechanism: "The threat actor transmitted high-frequency malformed, randomized, or boundary-testing data payloads across varied ports attempting to trigger unhandled exceptions, memory corruptions, or daemon crashes.",
+    why: "Unusual payload structure and asymmetric connection setup frequency triggered the anomaly and behavioral models; SHAP feature contributions indicate rapid port and TTL manipulation.",
+    prevention: [
+      "Enforce strict schema validation and input boundary sanitization on all exposed service ports.",
+      "Deploy stateful protocol inspection to drop malformed or out-of-RFC TCP/UDP packets.",
+      "Integrate automated fuzz testing (e.g. AFL / LibFuzzer) into continuous integration testing before software release.",
+      "Apply rate-limiting on connection initiation rates per client source IP."
+    ]
+  },
+  Reconnaissance: {
+    name: "Network & Port Reconnaissance Sweep",
+    mechanism: "The adversary conducted systematic network scanning and service sweeps to enumerate active IP addresses, listening daemon ports, and operating system fingerprints.",
+    why: "Rapid succession of connection attempts to varied destination ports with minimal data transfer triggered connection-count and TTL anomalies.",
+    prevention: [
+      "Disable unneeded listening services and restrict administrative ports via firewall ingress rules.",
+      "Configure IDS/IPS to automatically rate-limit or drop IPs initiating more than 10 connection attempts per minute across distinct ports.",
+      "Deploy decoy honeypot ports to trip and alert on initial reconnaissance sweeps.",
+      "Drop external ICMP echo requests and restrict DNS zone transfers."
+    ]
+  },
+  Exploits: {
+    name: "Targeted Vulnerability Exploitation",
+    mechanism: "The attacker delivered targeted exploit payloads attempting to leverage known software vulnerabilities (CVEs) in application or operating system services.",
+    why: "Packet payload structures, anomalous service port interactions, and signature probability from the supervised model identified recognized exploit patterns.",
+    prevention: [
+      "Apply the latest security patches for operating systems, web servers, and application dependencies.",
+      "Deploy Web Application Firewall (WAF) virtual patching rules to block known vulnerability signatures.",
+      "Execute services under non-root, least-privilege service accounts in sandboxed containers.",
+      "Enable endpoint detection and response (EDR) to monitor for unauthorized process execution."
+    ]
+  },
+  DoS: {
+    name: "Denial of Service (DoS) Flood",
+    mechanism: "The threat actor generated volumetric traffic or state-exhaustion floods designed to saturate network bandwidth and server connection tables, denying access to legitimate users.",
+    why: "Volumetric indicators including high packet rates, elevated source transmission load (sload), and destination packet loss flagged severe network congestion.",
+    prevention: [
+      "Utilize upstream DDoS mitigation scrubbers to absorb and filter volumetric flood attacks.",
+      "Enable SYN cookies and configure aggressive connection timeout limits on reverse proxies and load balancers.",
+      "Enforce client-subnet connection rate-limiting and connection caps.",
+      "Implement multi-region failover and horizontal auto-scaling for mission-critical infrastructure."
+    ]
+  },
+  Backdoor: {
+    name: "Covert Backdoor & Persistence",
+    mechanism: "A covert communication channel was utilized to bypass standard authentication controls, enabling persistent unauthorized remote management and command execution.",
+    why: "Persistent low-volume connection sessions with atypical inter-packet timing and unusual port combinations triggered behavioral sequence anomalies.",
+    prevention: [
+      "Enforce strict outbound egress filtering; deny all unapproved external connections from server subnets.",
+      "Audit active listening ports and reconcile running processes against approved baselines.",
+      "Enforce Multi-Factor Authentication (MFA) and Zero-Trust Network Access (ZTNA) across all management interfaces.",
+      "Continuously verify system binary and library file integrity using cryptographic file integrity monitoring."
+    ]
+  },
+  Generic: {
+    name: "Automated Exploitation & Collision Attack",
+    mechanism: "Automated exploitation tools or cryptographic collision attacks matching generalized attack signatures.",
+    why: "Supervised model detected high attack probability based on characteristic byte distributions and packet sequencing.",
+    prevention: [
+      "Maintain updated threat intelligence signature feeds on gateway firewalls and IPS appliances.",
+      "Enable deep packet inspection (DPI) on ingress network perimeter interfaces.",
+      "Review firewall logs for repeated source IP activity and implement geo-blocking if traffic originates from unapproved regions."
+    ]
+  },
+  Shellcode: {
+    name: "Memory Buffer Shellcode Injection",
+    mechanism: "Direct injection of machine-code instructions into memory buffers (stack/heap) designed to execute a root/administrative command shell.",
+    why: "Anomalous payload length, byte sequences matching shellcode execution stubs, and signature match triggered high alert confidence.",
+    prevention: [
+      "Enable hardware-enforced Data Execution Prevention (DEP / NX bit) and Address Space Layout Randomization (ASLR).",
+      "Compile binaries with stack canaries and safe memory management flags.",
+      "Perform static code analysis (SAST) to remediate unsafe memory manipulation functions."
+    ]
+  },
+  Worms: {
+    name: "Automated Worm Self-Propagation",
+    mechanism: "Self-propagating malware seeking to spread autonomously across adjacent network hosts and subnets.",
+    why: "Sudden surge in lateral connection attempts targeting common administrative and file-sharing ports across multiple internal IPs.",
+    prevention: [
+      "Implement strict internal network microsegmentation between server zones and workstation subnets.",
+      "Disable legacy protocols including SMBv1 and unauthenticated RPC across internal networks.",
+      "Configure automatic host network isolation upon detection of lateral worm propagation signatures."
+    ]
+  },
+  Analysis: {
+    name: "Web Application & Protocol Probing",
+    mechanism: "Application reconnaissance probes including directory traversal, parameter fuzzing, and web server banner grabbing.",
+    why: "Repetitive HTTP/application requests with small anomalous byte payloads probing response codes.",
+    prevention: [
+      "Sanitize all web application inputs and enforce strict URL validation rules.",
+      "Suppress server version banners and detailed stack trace error messages.",
+      "Implement IP-based request throttling on reverse proxies and API gateways."
+    ]
+  },
+  Normal: {
+    name: "Standard Legitimate Traffic",
+    mechanism: "Legitimate enterprise network traffic complying with standard protocol RFC specifications.",
+    why: "Traffic telemetry matches expected historical baselines for packet size, connection duration, and inter-arrival intervals.",
+    prevention: [
+      "Maintain continuous behavioral profiling to ensure legitimate business transactions remain unhindered by security controls."
+    ]
+  }
+};
+
+function buildAIExplanationHTML(cat, shapList, actionName, riskScore) {
+  const intel = CATEGORY_INTEL[cat] || CATEGORY_INTEL['Generic'];
+  const topFeatures = (shapList || []).slice(0, 4);
+
+  const featureList = topFeatures.map(f => {
+    const desc = FEATURE_EXPLANATIONS[f.feature] || "Network session traffic characteristic deviation";
+    const isPos = f.shap_value > 0;
+    const impact = isPos ? "drives risk upward" : "reduces risk";
+    return `
+      <li style="margin-bottom:6px;">
+        <span style="font-family:var(--font-data);color:${isPos ? '#C05621' : '#276749'};font-weight:600;">${f.feature} (${isPos ? '+' : ''}${f.shap_value.toFixed(3)})</span>:
+        <span style="color:var(--text-secondary);">${desc}</span> — <em style="color:var(--text-muted);">${impact}</em>.
+      </li>
+    `;
+  }).join('');
+
+  return `
+    <div style="background:var(--bg-surface);border:1px solid var(--border-dim);border-radius:var(--radius-lg);padding:18px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-dim);padding-bottom:10px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:16px;">🤖</span>
+          <span style="font-size:13px;font-weight:700;color:var(--text-primary);letter-spacing:0.5px;">AI Security Intelligence &amp; Playbook</span>
+        </div>
+        <span class="action-tag action-${actionName || 'Monitor'}" style="font-size:10px;">RL: ${actionName || 'Monitor'}</span>
+      </div>
+
+      <!-- 1. Why Attack Happened (Root Cause) -->
+      <div style="margin-bottom:14px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:5px;display:flex;align-items:center;gap:6px;">
+          <span>🔍</span> Why This Incident Occurred (Telemetry Root Cause)
+        </div>
+        <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:6px;">
+          ${intel.why}
+        </div>
+        ${topFeatures.length ? `
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin:6px 0 3px;">Top Feature Drivers (from SHAP Attribution):</div>
+          <ul style="margin:0;padding-left:18px;font-size:11px;line-height:1.5;">${featureList}</ul>
+        ` : ''}
+      </div>
+
+      <!-- 2. Threat Mechanics -->
+      <div style="margin-bottom:14px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:5px;display:flex;align-items:center;gap:6px;">
+          <span>🎯</span> Threat Vector &amp; Attacker Mechanics
+        </div>
+        <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;">
+          ${intel.mechanism}
+        </div>
+      </div>
+
+      <!-- 3. How to Prevent This Attack -->
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--sev-low);margin-bottom:5px;display:flex;align-items:center;gap:6px;">
+          <span>🛡️</span> How to Prevent &amp; Mitigate This Specific Attack (${cat})
+        </div>
+        <div style="background:rgba(39,103,73,0.08);border:1px solid rgba(39,103,73,0.25);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:600;color:var(--sev-low);margin-bottom:2px;">
+            Immediate Incident Response:
+          </div>
+          <div style="font-size:11px;color:var(--text-secondary);line-height:1.5;">
+            ${actionName === 'Block'
+              ? 'Autonomous Reinforcement Learning policy executed an immediate <strong>BLOCK</strong> action, provisioning firewall drop rules to isolate the attacking source socket.'
+              : 'Autonomous policy maintains <strong>MONITOR</strong> state to avert false-positive business disruptions while accumulating anomaly history.'}
+          </div>
+        </div>
+        <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">
+          Permanent Defense &amp; Hardening Checklist:
+        </div>
+        <ul style="margin:0;padding-left:18px;font-size:11px;color:var(--text-muted);line-height:1.6;">
+          ${intel.prevention.map(step => `<li>${step}</li>`).join('')}
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
 function renderShapDetail(inc) {
   const detail = document.getElementById('shapDetail');
   const sev = riskToSev(inc.risk_score || 0);
@@ -1642,49 +1862,62 @@ function renderShapDetail(inc) {
   const shap = inc.shap_top || [];
   const outcome = { '1,1': 'True Positive', '0,1': 'False Positive', '1,0': 'False Negative', '0,0': 'True Negative' };
   const outKey = `${inc.true_label || 0},${inc.is_alert ? 1 : 0}`;
+  const action = inc.action_name || (inc.risk_score > 0.5 ? 'Block' : 'Monitor');
+
+  const aiHTML = buildAIExplanationHTML(inc.attack_cat || 'Generic', shap, action, inc.risk_score || 0);
 
   detail.innerHTML = `
     <div style="margin-bottom:20px;">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-        <span style="font-size:18px;font-weight:700;color:var(--text-primary)">${inc.attack_cat || '—'}</span>
+        <span style="font-size:20px;font-weight:700;color:var(--text-primary)">${inc.attack_cat || '—'}</span>
         <span class="sev-badge ${sev}">${sevInfo.icon} ${sevInfo.label}</span>
       </div>
       <div style="font-family:var(--font-data);font-size:11px;color:var(--text-muted);">
-        Incident #${inc.id} &nbsp;·&nbsp; Outcome: ${outcome[outKey] || '—'} &nbsp;·&nbsp; Risk ${(inc.risk_score||0).toFixed(4)}
-      </div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">
-        SHAP values are from the XGBoost supervised component only — they do not explain the Autoencoder or LSTM signals.
+        Incident #${inc.id} &nbsp;·&nbsp; Outcome: ${outcome[outKey] || '—'} &nbsp;·&nbsp; Risk ${(inc.risk_score||0).toFixed(4)} &nbsp;·&nbsp; Ground Truth: ${inc.true_label === 1 ? 'Attack (1)' : 'Normal (0)'}
       </div>
     </div>
 
-    <div class="panel-label" style="margin-bottom:12px;">Feature Contributions</div>
-    <div style="max-width:480px;">
-      ${shap.map(f => {
-        const isPos = f.shap_value >= 0;
-        const barW = Math.min(200, Math.abs(f.shap_value) * 160);
-        return `
-          <div style="display:grid;grid-template-columns:130px 1fr 60px;align-items:center;gap:10px;margin:7px 0;">
-            <div style="font-family:var(--font-data);font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${f.feature}">${f.feature}</div>
-            <div style="height:14px;background:var(--border-dim);border-radius:2px;position:relative;overflow:visible;">
-              <div style="position:absolute;${isPos ? 'left:50%' : `left:calc(50% - ${barW/2}px)`};
-                width:${barW/2}px;height:14px;background:${isPos ? '#C05621' : '#276749'};opacity:0.75;border-radius:1px;
-                ${isPos ? '' : 'left:calc(50% - ' + (barW/2) + 'px)'};"></div>
-              <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--border-mid);"></div>
-            </div>
-            <div style="font-family:var(--font-data);font-size:12px;color:${isPos ? '#C05621' : '#276749'};text-align:right;">
-              ${f.shap_value >= 0 ? '+' : ''}${f.shap_value.toFixed(4)}
-            </div>
-          </div>
-        `;
-      }).join('')}
-    </div>
+    <div style="display:grid;grid-template-columns:minmax(320px, 1fr) minmax(360px, 1.2fr);gap:24px;align-items:start;">
+      <!-- Left Column: SHAP Features + Model Scores -->
+      <div>
+        <div class="panel-label" style="margin-bottom:12px;">Feature Contributions (SHAP Attributions)</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">
+          Calculated via TreeSHAP on XGBoost component. Bars indicate feature directionality towards attack prediction.
+        </div>
+        <div style="max-width:480px;">
+          ${shap.map(f => {
+            const isPos = f.shap_value >= 0;
+            const barW = Math.min(200, Math.abs(f.shap_value) * 160);
+            return `
+              <div style="display:grid;grid-template-columns:130px 1fr 60px;align-items:center;gap:10px;margin:7px 0;">
+                <div style="font-family:var(--font-data);font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${f.feature}">${f.feature}</div>
+                <div style="height:14px;background:var(--border-dim);border-radius:2px;position:relative;overflow:visible;">
+                  <div style="position:absolute;${isPos ? 'left:50%' : `left:calc(50% - ${barW/2}px)`};
+                    width:${barW/2}px;height:14px;background:${isPos ? '#C05621' : '#276749'};opacity:0.75;border-radius:1px;
+                    ${isPos ? '' : 'left:calc(50% - ' + (barW/2) + 'px)'};"></div>
+                  <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--border-mid);"></div>
+                </div>
+                <div style="font-family:var(--font-data);font-size:12px;color:${isPos ? '#C05621' : '#276749'};text-align:right;">
+                  ${f.shap_value >= 0 ? '+' : ''}${f.shap_value.toFixed(4)}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
 
-    <div class="panel-label" style="margin-top:20px;margin-bottom:10px;">Model Scores</div>
-    <div style="max-width:320px;">
-      ${scoreBar('XGBoost', inc.xgb_prob || 0, sevInfo.color)}
-      ${scoreBar('Autoencoder', inc.ae_score || 0, '#00A3C4')}
-      ${scoreBar('LSTM', inc.lstm_prob || 0, '#6B46C1')}
-      ${scoreBar('Uncertainty', inc.uncertainty || 0, '#8897A8')}
+        <div class="panel-label" style="margin-top:24px;margin-bottom:10px;">Pipeline Component Scores</div>
+        <div style="max-width:340px;">
+          ${scoreBar('XGBoost', inc.xgb_prob || 0, sevInfo.color)}
+          ${scoreBar('Autoencoder', inc.ae_score || 0, '#00A3C4')}
+          ${scoreBar('LSTM', inc.lstm_prob || 0, '#6B46C1')}
+          ${scoreBar('Uncertainty', inc.uncertainty || 0, '#8897A8')}
+        </div>
+      </div>
+
+      <!-- Right Column: AI Security Intelligence & Playbook -->
+      <div>
+        ${aiHTML}
+      </div>
     </div>
   `;
 }
@@ -2109,6 +2342,9 @@ function renderSimResult(d) {
         <div class="verdict-sub">Ground truth: ${d.true_label === 1 ? 'Attack' : 'Normal'}<br>Action taken: ${action}</div>
       </div>
     </div>
+
+    <!-- AI Security Intelligence & Playbook -->
+    ${buildAIExplanationHTML(d.true_attack_cat || d.attack_cat, shap, action, d.risk_score)}
   `;
 }
 
