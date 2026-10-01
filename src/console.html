@@ -1,0 +1,2050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetGuard-XAI | Security Operations Console</title>
+<meta name="description" content="NetGuard-XAI — Real-time Network Intrusion Detection with SHAP explainability and RL-adaptive containment. Trained on UNSW-NB15.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════
+   DESIGN TOKENS — from DESIGN_PLAN.md
+   ═══════════════════════════════════════════════════════════ */
+:root {
+  --bg-base:       #0C1220;
+  --bg-surface:    #111827;
+  --bg-elevated:   #172032;
+  --border-dim:    #1E2D42;
+  --border-mid:    #263347;
+
+  --text-primary:  #E2E8F0;
+  --text-secondary:#8897A8;
+  --text-muted:    #445566;
+
+  --sev-critical:  #C53030;
+  --sev-critical-bg: rgba(197,48,48,0.12);
+  --sev-high:      #C05621;
+  --sev-high-bg:   rgba(192,86,33,0.12);
+  --sev-medium:    #B7791F;
+  --sev-medium-bg: rgba(183,121,31,0.12);
+  --sev-low:       #276749;
+  --sev-low-bg:    rgba(39,103,73,0.12);
+  --sev-info:      #2C5282;
+  --sev-info-bg:   rgba(44,82,130,0.12);
+
+  --op-live:       #00A3C4;
+  --op-action:     #3B6EBF;
+  --op-action-hover: #4A80D4;
+  --op-unseen:     #6B46C1;
+  --op-unseen-bg:  rgba(107,70,193,0.15);
+
+  --font-ui:   'Inter', -apple-system, sans-serif;
+  --font-data: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESET & BASE
+   ═══════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { height: 100%; }
+
+body {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-primary);
+  background: var(--bg-base);
+  height: 100%;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LAYOUT SHELL
+   ═══════════════════════════════════════════════════════════ */
+.console {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ─── TOP BAR ─── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 44px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-dim);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo-mark {
+  width: 28px;
+  height: 28px;
+  background: var(--op-action);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.logo-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+}
+.logo-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--op-live);
+  animation: livePulse 2.5s ease-in-out infinite;
+}
+@keyframes livePulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0,163,196,0.6); }
+  50% { opacity: 0.8; box-shadow: 0 0 0 5px rgba(0,163,196,0); }
+}
+.topbar-time {
+  font-family: var(--font-data);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+#api-status-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(39,103,73,0.2);
+  color: var(--sev-low);
+  border: 1px solid rgba(39,103,73,0.4);
+  font-family: var(--font-data);
+}
+#api-status-badge.offline {
+  background: rgba(197,48,48,0.15);
+  color: var(--sev-critical);
+  border-color: rgba(197,48,48,0.4);
+}
+
+/* ─── THREAT BANNER ─── */
+.threat-banner {
+  padding: 12px 20px 10px;
+  border-bottom: 1px solid var(--border-dim);
+  background: var(--bg-surface);
+  display: flex;
+  align-items: center;
+  gap: 0;
+  position: relative;
+  transition: background-color 600ms ease-out, border-color 600ms ease-out;
+}
+.threat-banner::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  transition: background-color 600ms ease-out;
+}
+.threat-banner.sev-critical { background: rgba(197,48,48,0.07); }
+.threat-banner.sev-critical::before { background: var(--sev-critical); }
+.threat-banner.sev-high { background: rgba(192,86,33,0.07); }
+.threat-banner.sev-high::before { background: var(--sev-high); }
+.threat-banner.sev-medium { background: rgba(183,121,31,0.07); }
+.threat-banner.sev-medium::before { background: var(--sev-medium); }
+.threat-banner.sev-low, .threat-banner.sev-info {
+  background: var(--bg-surface);
+}
+.threat-banner.sev-low::before { background: var(--sev-low); }
+.threat-banner.sev-info::before { background: var(--sev-info); }
+
+.threat-level-block {
+  width: 180px;
+  flex-shrink: 0;
+  padding-left: 12px;
+}
+.threat-level-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.5px;
+  transition: color 600ms ease-out;
+}
+.threat-level-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 3px;
+}
+.threat-metrics {
+  display: flex;
+  align-items: flex-start;
+  gap: 32px;
+  flex: 1;
+  padding-left: 24px;
+  border-left: 1px solid var(--border-dim);
+}
+.threat-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.threat-metric-value {
+  font-family: var(--font-data);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+.threat-metric-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.risk-bar-wrap {
+  flex: 1;
+  max-width: 280px;
+  padding-top: 4px;
+}
+.risk-bar-track {
+  height: 5px;
+  background: var(--border-mid);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.risk-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 800ms ease-out, background-color 600ms ease-out;
+}
+.risk-bar-label {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+}
+.risk-bar-label span {
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ─── NAV TABS ─── */
+.nav-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 20px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-dim);
+  overflow-x: auto;
+}
+.nav-tab {
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 150ms, border-color 150ms;
+  font-family: var(--font-ui);
+}
+.nav-tab:hover { color: var(--text-secondary); }
+.nav-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--op-action);
+}
+.nav-tab:focus-visible {
+  outline: 2px solid var(--op-action);
+  outline-offset: -2px;
+}
+
+/* ─── MAIN CONTENT ─── */
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.panel-view {
+  display: none;
+  flex: 1;
+  overflow: hidden;
+}
+.panel-view.active {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── MONITOR VIEW: 2-column content ─── */
+.monitor-content {
+  display: grid;
+  grid-template-columns: 1fr 330px;
+  grid-template-rows: auto 1fr;
+  gap: 1px;
+  flex: 1;
+  background: var(--border-dim);
+  overflow: hidden;
+  min-height: 0;
+}
+.monitor-left {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-base);
+  overflow: hidden;
+  min-height: 0;
+}
+.monitor-right {
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-dim);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ─── UPPER SECTION (charts strip) ─── */
+.charts-strip {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 1px;
+  background: var(--border-dim);
+  flex-shrink: 0;
+  height: 180px;
+}
+.chart-panel {
+  background: var(--bg-surface);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+}
+.panel-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+canvas.chart { flex: 1; min-height: 0; }
+
+/* ─── INCIDENT FEED TABLE ─── */
+.feed-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-base);
+  overflow: hidden;
+  min-height: 0;
+}
+.feed-header {
+  display: grid;
+  grid-template-columns: 76px 86px 110px 60px 60px 60px 80px;
+  padding: 7px 16px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-mid);
+  flex-shrink: 0;
+}
+.feed-header span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.feed-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.feed-body::-webkit-scrollbar { width: 4px; }
+.feed-body::-webkit-scrollbar-track { background: transparent; }
+.feed-body::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 2px; }
+
+.feed-row {
+  display: grid;
+  grid-template-columns: 76px 86px 110px 60px 60px 60px 80px;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--border-dim);
+  cursor: pointer;
+  transition: background 100ms;
+  align-items: center;
+}
+.feed-row:hover { background: var(--bg-elevated); }
+.feed-row.selected { background: var(--bg-elevated); border-left: 2px solid var(--op-action); padding-left: 14px; }
+.feed-row.new-row { animation: rowSlideIn 300ms ease-out; }
+@keyframes rowSlideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.feed-cell {
+  font-family: var(--font-data);
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feed-cell.cat { font-family: var(--font-ui); color: var(--text-primary); font-weight: 500; }
+
+/* severity badge inline */
+.sev-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+.sev-badge.critical { color: var(--sev-critical); background: var(--sev-critical-bg); }
+.sev-badge.high     { color: var(--sev-high);     background: var(--sev-high-bg); }
+.sev-badge.medium   { color: var(--sev-medium);   background: var(--sev-medium-bg); }
+.sev-badge.low      { color: var(--sev-low);       background: var(--sev-low-bg); }
+.sev-badge.info     { color: #4A90D9;              background: var(--sev-info-bg); }
+
+/* action tag */
+.action-tag {
+  font-family: var(--font-data);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.03em;
+}
+.action-Allow    { color: #276749; background: rgba(39,103,73,0.18); }
+.action-Monitor  { color: #2C5282; background: rgba(44,82,130,0.2); }
+.action-RateLimit{ color: #B7791F; background: rgba(183,121,31,0.18); }
+.action-Block    { color: var(--sev-high); background: rgba(192,86,33,0.18); }
+.action-Isolate  { color: var(--sev-critical); background: rgba(197,48,48,0.18); }
+
+/* ─── RIGHT DETAIL PANEL ─── */
+.detail-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 14px 14px 20px;
+  gap: 16px;
+}
+.detail-panel::-webkit-scrollbar { width: 4px; }
+.detail-panel::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 2px; }
+
+.detail-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.8;
+  padding: 20px;
+}
+.detail-section { display: flex; flex-direction: column; gap: 8px; }
+.detail-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-dim);
+}
+.detail-cat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.detail-cat-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* score bars */
+.score-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 3px 0;
+}
+.score-label {
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: var(--text-muted);
+  width: 120px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.score-bar-track {
+  flex: 1;
+  height: 4px;
+  background: var(--border-mid);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.score-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 500ms ease-out;
+}
+.score-val {
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: var(--text-secondary);
+  width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* shap bars in detail */
+.shap-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0;
+}
+.shap-feat {
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: var(--text-muted);
+  width: 106px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shap-bar-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 12px;
+  position: relative;
+}
+.shap-center-line {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-mid);
+}
+.shap-bar {
+  position: absolute;
+  height: 8px;
+  top: 2px;
+  border-radius: 1px;
+}
+.shap-val {
+  font-family: var(--font-data);
+  font-size: 10px;
+  color: var(--text-secondary);
+  width: 38px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* RL action block */
+.rl-action-block {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rl-action-name {
+  font-family: var(--font-data);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.rl-action-unc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SIMULATE PANEL
+   ═══════════════════════════════════════════════════════════ */
+.simulate-view {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.simulate-view::-webkit-scrollbar { width: 5px; }
+.simulate-view::-webkit-scrollbar-thumb { background: var(--border-mid); }
+
+.sim-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sim-select-wrap {
+  position: relative;
+  flex: 1;
+  max-width: 460px;
+}
+.sim-select {
+  width: 100%;
+  padding: 8px 32px 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  cursor: pointer;
+  appearance: none;
+}
+.sim-select:focus { outline: 2px solid var(--op-action); outline-offset: 1px; }
+.sim-select-arrow {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+  font-size: 10px;
+}
+.btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: background 150ms, border-color 150ms, color 150ms;
+  white-space: nowrap;
+}
+.btn:focus-visible { outline: 2px solid var(--op-action); outline-offset: 2px; }
+.btn-primary {
+  background: var(--op-action);
+  border-color: var(--op-action);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--op-action-hover); border-color: var(--op-action-hover); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-secondary {
+  background: transparent;
+  border-color: var(--border-mid);
+  color: var(--text-secondary);
+}
+.btn-secondary:hover { border-color: var(--op-action); color: var(--text-primary); }
+.btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.cat-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid;
+}
+.cat-tag.known  { color: #4A90D9; background: rgba(59,110,191,0.15); border-color: rgba(59,110,191,0.4); }
+.cat-tag.unseen { color: #9F7AEA; background: var(--op-unseen-bg); border-color: rgba(107,70,193,0.4); }
+
+/* sim results grid */
+.sim-results {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 12px;
+}
+.sim-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+}
+.sim-panel-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-dim);
+}
+.sim-event-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+}
+.sim-field { display: flex; flex-direction: column; gap: 3px; }
+.sim-field-label { font-size: 10px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+.sim-field-value { font-family: var(--font-data); font-size: 13px; color: var(--text-primary); font-weight: 500; }
+
+/* bottom sim strip — narrative + verdict side by side */
+.sim-bottom {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 12px;
+}
+.verdict-block {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.verdict-icon { font-size: 22px; }
+.verdict-text {
+  font-family: var(--font-data);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.verdict-sub { font-size: 11px; color: var(--text-muted); }
+
+.narrative-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  grid-column: 1;
+}
+.narrative-text {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+/* RL action in sim */
+.rl-big {
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid;
+  text-align: center;
+}
+.rl-big-action {
+  font-family: var(--font-data);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  margin-bottom: 6px;
+}
+.rl-big-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* spinner */
+.spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid var(--border-mid);
+  border-top-color: var(--op-action);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ═══════════════════════════════════════════════════════════
+   OTHER PANELS (Explain, RL Policy, Phase Results)
+   ═══════════════════════════════════════════════════════════ */
+.generic-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.generic-panel::-webkit-scrollbar { width: 5px; }
+.generic-panel::-webkit-scrollbar-thumb { background: var(--border-mid); }
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.metric-tile {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+.metric-tile-val {
+  font-family: var(--font-data);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+.metric-tile-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 5px;
+  font-weight: 500;
+}
+.results-block {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.results-block-header {
+  padding: 10px 14px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-dim);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.results-block-body {
+  padding: 12px 14px;
+  display: none;
+}
+.results-block-body.open { display: block; }
+.results-block-body pre {
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.7;
+}
+
+/* shap incident selector */
+.shap-grid {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 1px;
+  background: var(--border-dim);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.shap-list {
+  background: var(--bg-surface);
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.shap-list::-webkit-scrollbar { width: 4px; }
+.shap-list::-webkit-scrollbar-thumb { background: var(--border-mid); }
+.shap-list-item {
+  padding: 8px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-dim);
+  transition: background 100ms;
+}
+.shap-list-item:hover { background: var(--bg-elevated); }
+.shap-list-item.selected { background: var(--bg-elevated); border-left: 2px solid var(--op-action); padding-left: 12px; }
+.shap-list-item-title { font-size: 12px; font-weight: 500; color: var(--text-primary); }
+.shap-list-item-meta { font-family: var(--font-data); font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+.shap-detail {
+  background: var(--bg-base);
+  overflow-y: auto;
+  padding: 20px;
+}
+.shap-detail::-webkit-scrollbar { width: 4px; }
+.shap-detail::-webkit-scrollbar-thumb { background: var(--border-mid); }
+
+/* chart via canvas — risk trajectory */
+#riskCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+#catCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  .monitor-content { grid-template-columns: 1fr; }
+  .monitor-right { display: none; }
+  .charts-strip { grid-template-columns: 1fr; height: auto; }
+  .chart-panel { height: 150px; }
+  .threat-metrics { gap: 16px; flex-wrap: wrap; }
+  .sim-results { grid-template-columns: 1fr; }
+  .sim-bottom { grid-template-columns: 1fr; }
+  .shap-grid { grid-template-columns: 1fr; }
+  .feed-header, .feed-row { grid-template-columns: 70px 80px 100px 55px 55px 55px 75px; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REDUCED MOTION
+   ═══════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+  }
+}
+</style>
+</head>
+<body>
+<div class="console">
+
+  <!-- TOP BAR -->
+  <header class="topbar" role="banner">
+    <div class="topbar-left">
+      <div class="logo-mark" aria-hidden="true">🛡</div>
+      <div>
+        <div class="logo-text">NetGuard-XAI</div>
+        <div class="logo-sub">Security Operations Console</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span id="api-status-badge">API ONLINE</span>
+      <div class="live-indicator">
+        <div class="live-dot" aria-hidden="true"></div>
+        <span>LIVE</span>
+      </div>
+      <span class="topbar-time" id="clock" aria-label="Current UTC time"></span>
+    </div>
+  </header>
+
+  <!-- THREAT BANNER (Tier 1 Hero) -->
+  <div class="threat-banner sev-info" id="threatBanner" role="status" aria-live="polite" aria-label="Current threat level">
+    <div class="threat-level-block">
+      <div class="threat-level-value" id="threatLevelText" style="color: var(--sev-info)">○ NORMAL</div>
+      <div class="threat-level-label">Threat Level</div>
+    </div>
+    <div class="threat-metrics">
+      <div class="threat-metric">
+        <div class="threat-metric-value" id="metricRisk">0.000</div>
+        <div class="threat-metric-label">Risk Score</div>
+        <div class="risk-bar-track" style="margin-top:5px; width:120px;">
+          <div class="risk-bar-fill" id="riskBarFill" style="width:0%; background:var(--sev-info)"></div>
+        </div>
+      </div>
+      <div class="threat-metric">
+        <div class="threat-metric-value" id="metricAlerts">0</div>
+        <div class="threat-metric-label">Active Alerts</div>
+      </div>
+      <div class="threat-metric">
+        <div class="threat-metric-value" id="metricTotal">0</div>
+        <div class="threat-metric-label">Events Loaded</div>
+      </div>
+      <div class="threat-metric">
+        <div class="threat-metric-value" id="metricUnc">0.000</div>
+        <div class="threat-metric-label">Avg Uncertainty</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NAV TABS -->
+  <nav class="nav-tabs" role="tablist" aria-label="Console sections">
+    <button class="nav-tab active" role="tab" aria-selected="true"  id="tab-monitor"   onclick="switchTab('monitor')"   aria-controls="view-monitor">Live Monitor</button>
+    <button class="nav-tab"        role="tab" aria-selected="false" id="tab-explain"   onclick="switchTab('explain')"   aria-controls="view-explain">SHAP Explain</button>
+    <button class="nav-tab"        role="tab" aria-selected="false" id="tab-rl"        onclick="switchTab('rl')"        aria-controls="view-rl">RL Policy</button>
+    <button class="nav-tab"        role="tab" aria-selected="false" id="tab-results"   onclick="switchTab('results')"   aria-controls="view-results">Phase Results</button>
+    <button class="nav-tab"        role="tab" aria-selected="false" id="tab-simulate"  onclick="switchTab('simulate')"  aria-controls="view-simulate">Simulate Attack</button>
+  </nav>
+
+  <!-- MAIN CONTENT AREA -->
+  <main class="main-area" role="main">
+
+    <!-- ═══ MONITOR VIEW ═══ -->
+    <div class="panel-view active" id="view-monitor" role="tabpanel" aria-labelledby="tab-monitor">
+      <div class="monitor-content">
+        <!-- LEFT COLUMN -->
+        <div class="monitor-left">
+          <!-- Charts strip -->
+          <div class="charts-strip">
+            <div class="chart-panel">
+              <div class="panel-label">Risk Trajectory — Live</div>
+              <canvas id="riskCanvas" class="chart"></canvas>
+            </div>
+            <div class="chart-panel">
+              <div class="panel-label">Attack Categories</div>
+              <canvas id="catCanvas" class="chart"></canvas>
+            </div>
+          </div>
+          <!-- Feed -->
+          <div class="feed-panel">
+            <div class="feed-header" aria-label="Incident feed columns">
+              <span>Time</span>
+              <span>Severity</span>
+              <span>Category</span>
+              <span>XGB</span>
+              <span>AE</span>
+              <span>Risk</span>
+              <span>RL Action</span>
+            </div>
+            <div class="feed-body" id="feedBody" role="log" aria-label="Incident feed" aria-live="polite"></div>
+          </div>
+        </div>
+        <!-- RIGHT DETAIL PANEL -->
+        <aside class="monitor-right" role="complementary" aria-label="Incident detail">
+          <div class="detail-panel" id="detailPanel">
+            <div class="detail-empty">
+              Click any incident row<br>to see model scores,<br>SHAP features &amp; RL decision
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- ═══ SHAP EXPLAIN VIEW ═══ -->
+    <div class="panel-view" id="view-explain" role="tabpanel" aria-labelledby="tab-explain">
+      <div class="shap-grid" style="display:flex;flex:1;overflow:hidden;">
+        <div class="shap-list" id="shapList" style="width:240px;flex-shrink:0;"></div>
+        <div class="shap-detail" id="shapDetail" style="flex:1;">
+          <div class="detail-empty" style="height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted)">Select an incident on the left</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ RL POLICY VIEW ═══ -->
+    <div class="panel-view" id="view-rl" role="tabpanel" aria-labelledby="tab-rl">
+      <div class="generic-panel" id="rlPanel">
+        <div class="panel-label">DQN Policy Evaluation</div>
+        <div class="metrics-grid" id="rlMetrics"></div>
+        <div id="rlActionDist"></div>
+        <div id="rlTrainingNote"></div>
+      </div>
+    </div>
+
+    <!-- ═══ PHASE RESULTS VIEW ═══ -->
+    <div class="panel-view" id="view-results" role="tabpanel" aria-labelledby="tab-results">
+      <div class="generic-panel" id="resultsPanel">
+        <div class="panel-label">Model &amp; Phase Evaluation Results</div>
+        <div id="resultsContent"></div>
+      </div>
+    </div>
+
+    <!-- ═══ SIMULATE VIEW ═══ -->
+    <div class="panel-view" id="view-simulate" role="tabpanel" aria-labelledby="tab-simulate">
+      <div class="simulate-view">
+
+        <!-- description -->
+        <p style="font-size:12px;color:var(--text-muted);line-height:1.7;max-width:680px;">
+          The deployed <strong style="color:var(--text-secondary)">restricted model set</strong> was trained without Reconnaissance or Fuzzers.
+          Selecting either demonstrates genuine zero-day handling — the models truly have no training examples of these categories.
+          Each run samples a different real row from the UNSW-NB15 test CSV; the row index is shown for reproducibility.
+        </p>
+
+        <!-- controls -->
+        <div class="sim-controls">
+          <div class="sim-select-wrap">
+            <select class="sim-select" id="simCatSelect" aria-label="Attack category to simulate">
+              <option value="">Loading categories...</option>
+            </select>
+            <span class="sim-select-arrow" aria-hidden="true">▼</span>
+          </div>
+          <span id="simCatTag"></span>
+          <button class="btn btn-primary" id="btnRunSim" onclick="runSimulation()" aria-label="Run attack simulation">Run Simulation</button>
+          <button class="btn btn-secondary" id="btnRunAgain" onclick="runSimulation()" disabled aria-label="Run another simulation with a different row">Run Another</button>
+        </div>
+
+        <!-- result area -->
+        <div id="simResultArea"></div>
+
+        <!-- run history -->
+        <div id="simHistory" style="display:none;">
+          <div class="panel-label" style="margin-bottom:8px;">Run History</div>
+          <div style="background:var(--bg-surface);border:1px solid var(--border-dim);border-radius:var(--radius-lg);overflow:hidden;">
+            <table id="histTable" style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr style="background:var(--bg-elevated);">
+                  <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;">#</th>
+                  <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;">Category</th>
+                  <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;">Row</th>
+                  <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;">Risk</th>
+                  <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;">Action</th>
+                  <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;">Verdict</th>
+                </tr>
+              </thead>
+              <tbody id="histBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   CONFIGURATION
+   ═══════════════════════════════════════════════════════════ */
+const API = 'http://localhost:8000';
+const REFRESH_MS = 6000;
+const MAX_RISK_POINTS = 80;
+
+/* ═══════════════════════════════════════════════════════════
+   SEVERITY HELPERS
+   ═══════════════════════════════════════════════════════════ */
+function riskToSev(r) {
+  if (r >= 0.80) return 'critical';
+  if (r >= 0.55) return 'high';
+  if (r >= 0.35) return 'medium';
+  if (r >= 0.15) return 'low';
+  return 'info';
+}
+const SEV_DISPLAY = {
+  critical: { icon: '●', label: 'CRITICAL', color: 'var(--sev-critical)' },
+  high:     { icon: '▲', label: 'HIGH',     color: 'var(--sev-high)' },
+  medium:   { icon: '◆', label: 'MEDIUM',   color: 'var(--sev-medium)' },
+  low:      { icon: '▼', label: 'LOW',      color: 'var(--sev-low)' },
+  info:     { icon: '○', label: 'NORMAL',   color: 'var(--sev-info)' },
+};
+const ACTION_COLORS = {
+  Allow:     { fg: '#276749', bg: 'rgba(39,103,73,0.18)' },
+  Monitor:   { fg: '#2C5282', bg: 'rgba(44,82,130,0.2)' },
+  RateLimit: { fg: '#B7791F', bg: 'rgba(183,121,31,0.18)' },
+  Block:     { fg: '#C05621', bg: 'rgba(192,86,33,0.18)' },
+  Isolate:   { fg: '#C53030', bg: 'rgba(197,48,48,0.18)' },
+};
+
+/* ═══════════════════════════════════════════════════════════
+   CLOCK
+   ═══════════════════════════════════════════════════════════ */
+function tickClock() {
+  const now = new Date();
+  const hh = now.getUTCHours().toString().padStart(2, '0');
+  const mm = now.getUTCMinutes().toString().padStart(2, '0');
+  const ss = now.getUTCSeconds().toString().padStart(2, '0');
+  document.getElementById('clock').textContent = `${hh}:${mm}:${ss} UTC`;
+}
+tickClock();
+setInterval(tickClock, 1000);
+
+/* ═══════════════════════════════════════════════════════════
+   TAB NAVIGATION
+   ═══════════════════════════════════════════════════════════ */
+function switchTab(name) {
+  document.querySelectorAll('.nav-tab').forEach(t => {
+    t.classList.remove('active');
+    t.setAttribute('aria-selected', 'false');
+  });
+  document.querySelectorAll('.panel-view').forEach(v => v.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  document.getElementById(`tab-${name}`).setAttribute('aria-selected', 'true');
+  document.getElementById(`view-${name}`).classList.add('active');
+  if (name === 'explain') loadShapData();
+  if (name === 'rl') loadRLData();
+  if (name === 'results') loadResultsData();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RISK TRAJECTORY CANVAS CHART
+   ═══════════════════════════════════════════════════════════ */
+let riskPoints = [];
+let riskCanvas = null, riskCtx = null;
+
+function initRiskChart() {
+  riskCanvas = document.getElementById('riskCanvas');
+  riskCtx = riskCanvas.getContext('2d');
+}
+
+function appendRiskPoint(r) {
+  riskPoints.push(r);
+  if (riskPoints.length > MAX_RISK_POINTS) riskPoints.shift();
+  drawRiskChart();
+}
+
+function drawRiskChart() {
+  if (!riskCtx) return;
+  const w = riskCanvas.width = riskCanvas.offsetWidth;
+  const h = riskCanvas.height = riskCanvas.offsetHeight;
+  riskCtx.clearRect(0, 0, w, h);
+
+  const pts = riskPoints;
+  if (pts.length < 2) return;
+
+  const pad = { t: 8, b: 20, l: 6, r: 8 };
+  const iw = w - pad.l - pad.r;
+  const ih = h - pad.t - pad.b;
+
+  function px(i) { return pad.l + (i / (MAX_RISK_POINTS - 1)) * iw; }
+  function py(v) { return pad.t + (1 - v) * ih; }
+
+  // Grid lines: 0.5 (warn) and 0.8 (critical)
+  riskCtx.setLineDash([3, 4]);
+  riskCtx.lineWidth = 1;
+  riskCtx.strokeStyle = 'rgba(183,121,31,0.3)';
+  riskCtx.beginPath();
+  riskCtx.moveTo(pad.l, py(0.5));
+  riskCtx.lineTo(pad.l + iw, py(0.5));
+  riskCtx.stroke();
+  riskCtx.fillStyle = 'rgba(183,121,31,0.6)';
+  riskCtx.font = '9px JetBrains Mono';
+  riskCtx.fillText('0.50', pad.l + iw - 24, py(0.5) - 3);
+
+  riskCtx.strokeStyle = 'rgba(197,48,48,0.3)';
+  riskCtx.beginPath();
+  riskCtx.moveTo(pad.l, py(0.8));
+  riskCtx.lineTo(pad.l + iw, py(0.8));
+  riskCtx.stroke();
+  riskCtx.fillStyle = 'rgba(197,48,48,0.6)';
+  riskCtx.fillText('0.80', pad.l + iw - 24, py(0.8) - 3);
+  riskCtx.setLineDash([]);
+
+  // Fill area
+  const startX = pad.l + ((pts.length - 1) - (pts.length - 1)) / (MAX_RISK_POINTS - 1) * iw;
+  const actualStartX = pad.l;
+  const offsetStep = iw / (MAX_RISK_POINTS - 1);
+
+  const grad = riskCtx.createLinearGradient(0, pad.t, 0, pad.t + ih);
+  const lastR = pts[pts.length - 1];
+  const sev = riskToSev(lastR);
+  const sevColors = {
+    critical: 'rgba(197,48,48,',
+    high:     'rgba(192,86,33,',
+    medium:   'rgba(183,121,31,',
+    low:      'rgba(39,103,73,',
+    info:     'rgba(44,82,130,',
+  };
+  const c = sevColors[sev] || sevColors.info;
+  grad.addColorStop(0, c + '0.25)');
+  grad.addColorStop(1, c + '0.02)');
+
+  const offset = MAX_RISK_POINTS - pts.length;
+  riskCtx.beginPath();
+  pts.forEach((v, i) => {
+    const x = pad.l + (offset + i) * offsetStep;
+    const y = py(v);
+    if (i === 0) riskCtx.moveTo(x, y);
+    else riskCtx.lineTo(x, y);
+  });
+  riskCtx.lineTo(pad.l + (offset + pts.length - 1) * offsetStep, pad.t + ih);
+  riskCtx.lineTo(pad.l + offset * offsetStep, pad.t + ih);
+  riskCtx.closePath();
+  riskCtx.fillStyle = grad;
+  riskCtx.fill();
+
+  // Line
+  const lineColor = {
+    critical: '#C53030', high: '#C05621', medium: '#B7791F',
+    low: '#276749', info: '#3B6EBF'
+  }[sev];
+  riskCtx.beginPath();
+  pts.forEach((v, i) => {
+    const x = pad.l + (offset + i) * offsetStep;
+    const y = py(v);
+    if (i === 0) riskCtx.moveTo(x, y);
+    else riskCtx.lineTo(x, y);
+  });
+  riskCtx.strokeStyle = lineColor;
+  riskCtx.lineWidth = 1.5;
+  riskCtx.stroke();
+
+  // X-axis labels
+  riskCtx.fillStyle = '#445566';
+  riskCtx.font = '9px JetBrains Mono';
+  riskCtx.fillText('older', pad.l, pad.t + ih + 14);
+  riskCtx.textAlign = 'right';
+  riskCtx.fillText('now', pad.l + iw, pad.t + ih + 14);
+  riskCtx.textAlign = 'left';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CATEGORY DISTRIBUTION CANVAS CHART
+   ═══════════════════════════════════════════════════════════ */
+const CAT_COLORS = [
+  '#C53030','#C05621','#B7791F','#276749','#2C5282',
+  '#6B46C1','#00A3C4','#3B6EBF','#805AD5','#4A90D9'
+];
+
+function drawCatChart(catCounts) {
+  const canvas = document.getElementById('catCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width = canvas.offsetWidth;
+  const h = canvas.height = canvas.offsetHeight;
+  ctx.clearRect(0, 0, w, h);
+
+  const entries = Object.entries(catCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  if (entries.length === 0) return;
+
+  const total = entries.reduce((s, [, v]) => s + v, 0);
+  const maxVal = entries[0][1];
+  const pad = { t: 4, b: 4, l: 4, r: 28 };
+  const labelW = 100;
+  const rowH = Math.min(20, (h - pad.t - pad.b) / entries.length);
+
+  entries.forEach(([cat, count], i) => {
+    const y = pad.t + i * rowH;
+    const barW = Math.max(2, (count / maxVal) * (w - pad.l - labelW - pad.r - 8));
+    const color = CAT_COLORS[i % CAT_COLORS.length];
+
+    // bar
+    ctx.fillStyle = color + '33';
+    ctx.fillRect(pad.l + labelW, y + 3, barW, rowH - 8);
+    ctx.fillStyle = color;
+    ctx.fillRect(pad.l + labelW, y + 3, barW, 2);
+
+    // label
+    ctx.fillStyle = '#8897A8';
+    ctx.font = '10px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(cat.slice(0, 14), pad.l, y + rowH - 7);
+
+    // count
+    ctx.fillStyle = color;
+    ctx.font = '10px "JetBrains Mono", monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(count, w - 4, y + rowH - 7);
+    ctx.textAlign = 'left';
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════════════════════ */
+let incidentData = [];
+let selectedIncidentId = null;
+let currentSev = 'info';
+let shapData = [];
+let simHistory = [];
+let simRunCount = 0;
+
+/* ═══════════════════════════════════════════════════════════
+   THREAT BANNER UPDATE
+   ═══════════════════════════════════════════════════════════ */
+function updateThreatBanner(incidents) {
+  if (!incidents.length) return;
+  const avgRisk = incidents.reduce((s, d) => s + (d.risk_score || 0), 0) / incidents.length;
+  const alertCount = incidents.filter(d => d.is_alert).length;
+  const avgUnc = incidents.reduce((s, d) => s + (d.uncertainty || 0), 0) / incidents.length;
+
+  const sev = riskToSev(avgRisk);
+  const sevInfo = SEV_DISPLAY[sev];
+
+  if (sev !== currentSev) {
+    const banner = document.getElementById('threatBanner');
+    banner.className = `threat-banner sev-${sev}`;
+    currentSev = sev;
+  }
+
+  document.getElementById('threatLevelText').textContent = `${sevInfo.icon} ${sevInfo.label}`;
+  document.getElementById('threatLevelText').style.color = sevInfo.color;
+  document.getElementById('metricRisk').textContent = avgRisk.toFixed(3);
+  document.getElementById('metricAlerts').textContent = alertCount;
+  document.getElementById('metricTotal').textContent = incidents.length;
+  document.getElementById('metricUnc').textContent = avgUnc.toFixed(3);
+
+  const fill = document.getElementById('riskBarFill');
+  fill.style.width = Math.min(100, avgRisk * 100) + '%';
+  fill.style.background = sevInfo.color;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INCIDENT FEED
+   ═══════════════════════════════════════════════════════════ */
+function renderFeed(incidents) {
+  const body = document.getElementById('feedBody');
+  const prevIds = new Set(Array.from(body.querySelectorAll('.feed-row')).map(r => r.dataset.id));
+  body.innerHTML = '';
+
+  const catCounts = {};
+  const riskArr = [];
+
+  incidents.slice().reverse().forEach((inc, idx) => {
+    const sev = riskToSev(inc.risk_score || 0);
+    const sevInfo = SEV_DISPLAY[sev];
+    const isNew = !prevIds.has(String(inc.id));
+    const isSelected = inc.id === selectedIncidentId;
+
+    // Track risk
+    riskArr.push(inc.risk_score || 0);
+
+    // Track cat counts (alerts only, or all)
+    if (inc.attack_cat) {
+      catCounts[inc.attack_cat] = (catCounts[inc.attack_cat] || 0) + 1;
+    }
+
+    const action = inc.action_name || 'N/A';
+    const ac = ACTION_COLORS[action] || { fg: '#8897A8', bg: 'rgba(136,151,168,0.12)' };
+
+    const ts = inc.timestamp
+      ? new Date(inc.timestamp).toLocaleTimeString('en-GB', { hour12: false, timeZone: 'UTC' })
+      : '—';
+
+    const row = document.createElement('div');
+    row.className = `feed-row${isNew ? ' new-row' : ''}${isSelected ? ' selected' : ''}`;
+    row.dataset.id = inc.id;
+    row.setAttribute('tabindex', '0');
+    row.setAttribute('role', 'row');
+    row.setAttribute('aria-label', `${inc.attack_cat || '—'} incident, severity ${sevInfo.label}, action ${action}`);
+    row.innerHTML = `
+      <span class="feed-cell">${ts}</span>
+      <span class="feed-cell">
+        <span class="sev-badge ${sev}" aria-label="Severity ${sevInfo.label}">
+          ${sevInfo.icon} ${sevInfo.label}
+        </span>
+      </span>
+      <span class="feed-cell cat">${inc.attack_cat || '—'}</span>
+      <span class="feed-cell">${(inc.xgb_prob || 0).toFixed(3)}</span>
+      <span class="feed-cell">${(inc.ae_score || 0).toFixed(3)}</span>
+      <span class="feed-cell">${(inc.risk_score || 0).toFixed(3)}</span>
+      <span class="feed-cell">
+        <span class="action-tag action-${action}" style="color:${ac.fg};background:${ac.bg}">${action}</span>
+      </span>
+    `;
+    row.addEventListener('click', () => selectIncident(inc));
+    row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') selectIncident(inc); });
+    body.appendChild(row);
+  });
+
+  // Update risk chart
+  const latestRisk = incidents.length ? (incidents[incidents.length - 1].risk_score || 0) : 0;
+  appendRiskPoint(latestRisk);
+
+  // Update category chart
+  drawCatChart(catCounts);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INCIDENT DETAIL PANEL
+   ═══════════════════════════════════════════════════════════ */
+function selectIncident(inc) {
+  selectedIncidentId = inc.id;
+  // Update feed selection highlight
+  document.querySelectorAll('.feed-row').forEach(r => {
+    r.classList.toggle('selected', r.dataset.id === String(inc.id));
+  });
+  renderDetailPanel(inc);
+}
+
+function renderDetailPanel(inc) {
+  const panel = document.getElementById('detailPanel');
+  const sev = riskToSev(inc.risk_score || 0);
+  const sevInfo = SEV_DISPLAY[sev];
+  const action = inc.action_name || 'N/A';
+  const ac = ACTION_COLORS[action] || { fg: '#8897A8', bg: 'rgba(136,151,168,0.12)' };
+
+  const shap = inc.shap_top || [];
+
+  panel.innerHTML = `
+    <div class="detail-section">
+      <div class="detail-cat-row">
+        <span class="detail-cat-name">${inc.attack_cat || '—'}</span>
+        <span class="sev-badge ${sev}">${sevInfo.icon} ${sevInfo.label}</span>
+      </div>
+      <div style="font-family:var(--font-data);font-size:11px;color:var(--text-muted);">
+        Incident #${inc.id} &nbsp;·&nbsp; ${inc.is_alert ? 'Alert' : 'Normal'}
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-title">Model Scores</div>
+      ${scoreBar('XGB', inc.xgb_prob || 0, sevInfo.color)}
+      ${scoreBar('AE', inc.ae_score || 0, '#00A3C4')}
+      ${scoreBar('LSTM', inc.lstm_prob || 0, '#6B46C1')}
+      ${scoreBar('Unc', inc.uncertainty || 0, '#8897A8')}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-title">Risk Engine</div>
+      <div style="display:flex;gap:16px;">
+        <div class="sim-field">
+          <div class="sim-field-label">R_t</div>
+          <div class="sim-field-value" style="color:${sevInfo.color}">${(inc.risk_score || 0).toFixed(4)}</div>
+        </div>
+        <div class="sim-field">
+          <div class="sim-field-label">ΔR</div>
+          <div class="sim-field-value">${(inc.risk_delta || 0) >= 0 ? '+' : ''}${(inc.risk_delta || 0).toFixed(4)}</div>
+        </div>
+      </div>
+    </div>
+
+    ${shap.length ? `
+    <div class="detail-section">
+      <div class="detail-title">SHAP — XGBoost</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Supervised component only</div>
+      ${shap.map(f => shapBarDetail(f.feature, f.shap_value)).join('')}
+    </div>
+    ` : ''}
+
+    <div class="detail-section">
+      <div class="detail-title">RL Policy Decision</div>
+      <div class="rl-action-block" style="border-color:${ac.fg}33;background:${ac.bg};">
+        <div>
+          <div class="rl-action-name" style="color:${ac.fg}">${action}</div>
+          <div class="rl-action-unc">uncertainty ${(inc.uncertainty || 0).toFixed(4)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function scoreBar(label, val, color) {
+  const pct = Math.min(100, val * 100);
+  return `
+    <div class="score-row">
+      <div class="score-label">${label}</div>
+      <div class="score-bar-track">
+        <div class="score-bar-fill" style="width:${pct}%;background:${color}"></div>
+      </div>
+      <div class="score-val">${val.toFixed(3)}</div>
+    </div>
+  `;
+}
+
+function shapBarDetail(feat, val) {
+  const maxAbs = 1.0;
+  const pct = Math.min(50, Math.abs(val) / maxAbs * 50);
+  const isPos = val >= 0;
+  return `
+    <div class="shap-row">
+      <div class="shap-feat" title="${feat}">${feat}</div>
+      <div class="shap-bar-wrap">
+        <div class="shap-center-line"></div>
+        <div class="shap-bar" style="
+          ${isPos ? 'left:50%' : `left:${50 - pct}%`};
+          width:${pct}%;
+          background:${isPos ? '#C05621' : '#276749'};
+          opacity:0.8;
+        "></div>
+      </div>
+      <div class="shap-val">${val >= 0 ? '+' : ''}${val.toFixed(3)}</div>
+    </div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DATA LOADING — LIVE MONITOR
+   ═══════════════════════════════════════════════════════════ */
+async function loadIncidents() {
+  try {
+    const r = await fetch(`${API}/incidents/recent?limit=100`);
+    if (!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    incidentData = data;
+
+    // Set API badge online
+    const badge = document.getElementById('api-status-badge');
+    badge.textContent = 'API ONLINE';
+    badge.className = '';
+
+    updateThreatBanner(data);
+    renderFeed(data);
+
+    // Restore detail panel if selected
+    if (selectedIncidentId) {
+      const inc = data.find(d => d.id === selectedIncidentId);
+      if (inc) renderDetailPanel(inc);
+    }
+  } catch (e) {
+    const badge = document.getElementById('api-status-badge');
+    badge.textContent = 'API OFFLINE';
+    badge.className = 'offline';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SHAP EXPLAIN TAB
+   ═══════════════════════════════════════════════════════════ */
+async function loadShapData() {
+  if (shapData.length) return; // already loaded
+  const listEl = document.getElementById('shapList');
+  listEl.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:12px;">Loading…</div>';
+
+  try {
+    const r = await fetch(`${API}/incidents/recent?limit=50`);
+    const data = await r.json();
+    shapData = data.filter(d => d.shap_top && d.shap_top.length);
+    renderShapList(shapData);
+  } catch (e) {
+    listEl.innerHTML = '<div style="padding:12px;color:var(--sev-critical);font-size:12px;">API offline</div>';
+  }
+}
+
+function renderShapList(data) {
+  const listEl = document.getElementById('shapList');
+  listEl.innerHTML = '';
+  if (!data.length) {
+    listEl.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:12px;">No incidents with SHAP data</div>';
+    return;
+  }
+  data.forEach((inc, i) => {
+    const sev = riskToSev(inc.risk_score || 0);
+    const sevInfo = SEV_DISPLAY[sev];
+    const item = document.createElement('div');
+    item.className = 'shap-list-item' + (i === 0 ? ' selected' : '');
+    item.innerHTML = `
+      <div class="shap-list-item-title">${inc.attack_cat || '—'} <span class="sev-badge ${sev}" style="font-size:10px;">${sevInfo.icon} ${sevInfo.label}</span></div>
+      <div class="shap-list-item-meta">Incident #${inc.id} · Risk ${(inc.risk_score||0).toFixed(3)}</div>
+    `;
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.shap-list-item').forEach(el => el.classList.remove('selected'));
+      item.classList.add('selected');
+      renderShapDetail(inc);
+    });
+    listEl.appendChild(item);
+    if (i === 0) renderShapDetail(inc);
+  });
+}
+
+function renderShapDetail(inc) {
+  const detail = document.getElementById('shapDetail');
+  const sev = riskToSev(inc.risk_score || 0);
+  const sevInfo = SEV_DISPLAY[sev];
+  const shap = inc.shap_top || [];
+  const outcome = { '1,1': 'True Positive', '0,1': 'False Positive', '1,0': 'False Negative', '0,0': 'True Negative' };
+  const outKey = `${inc.true_label || 0},${inc.is_alert ? 1 : 0}`;
+
+  detail.innerHTML = `
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+        <span style="font-size:18px;font-weight:700;color:var(--text-primary)">${inc.attack_cat || '—'}</span>
+        <span class="sev-badge ${sev}">${sevInfo.icon} ${sevInfo.label}</span>
+      </div>
+      <div style="font-family:var(--font-data);font-size:11px;color:var(--text-muted);">
+        Incident #${inc.id} &nbsp;·&nbsp; Outcome: ${outcome[outKey] || '—'} &nbsp;·&nbsp; Risk ${(inc.risk_score||0).toFixed(4)}
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+        SHAP values are from the XGBoost supervised component only — they do not explain the Autoencoder or LSTM signals.
+      </div>
+    </div>
+
+    <div class="panel-label" style="margin-bottom:12px;">Feature Contributions</div>
+    <div style="max-width:480px;">
+      ${shap.map(f => {
+        const isPos = f.shap_value >= 0;
+        const barW = Math.min(200, Math.abs(f.shap_value) * 160);
+        return `
+          <div style="display:grid;grid-template-columns:130px 1fr 60px;align-items:center;gap:10px;margin:7px 0;">
+            <div style="font-family:var(--font-data);font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${f.feature}">${f.feature}</div>
+            <div style="height:14px;background:var(--border-dim);border-radius:2px;position:relative;overflow:visible;">
+              <div style="position:absolute;${isPos ? 'left:50%' : `left:calc(50% - ${barW/2}px)`};
+                width:${barW/2}px;height:14px;background:${isPos ? '#C05621' : '#276749'};opacity:0.75;border-radius:1px;
+                ${isPos ? '' : 'left:calc(50% - ' + (barW/2) + 'px)'};"></div>
+              <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--border-mid);"></div>
+            </div>
+            <div style="font-family:var(--font-data);font-size:12px;color:${isPos ? '#C05621' : '#276749'};text-align:right;">
+              ${f.shap_value >= 0 ? '+' : ''}${f.shap_value.toFixed(4)}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+
+    <div class="panel-label" style="margin-top:20px;margin-bottom:10px;">Model Scores</div>
+    <div style="max-width:320px;">
+      ${scoreBar('XGBoost', inc.xgb_prob || 0, sevInfo.color)}
+      ${scoreBar('Autoencoder', inc.ae_score || 0, '#00A3C4')}
+      ${scoreBar('LSTM', inc.lstm_prob || 0, '#6B46C1')}
+      ${scoreBar('Uncertainty', inc.uncertainty || 0, '#8897A8')}
+    </div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RL POLICY TAB
+   ═══════════════════════════════════════════════════════════ */
+async function loadRLData() {
+  const panel = document.getElementById('rlMetrics');
+  if (panel.innerHTML) return;
+
+  try {
+    const r = await fetch('../results/dqn_test_eval.json');
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    const metrics = [
+      ['Attack Containment Rate', (data.attack_containment_rate * 100).toFixed(1) + '%'],
+      ['FP Intervention Rate', (data.false_positive_intervention_rate * 100).toFixed(1) + '%'],
+      ['Avg Episode Reward', data.average_reward.toFixed(3)],
+      ['Eval Episodes', data.n_episodes || '—'],
+    ];
+    panel.innerHTML = metrics.map(([label, val]) => `
+      <div class="metric-tile">
+        <div class="metric-tile-val">${val}</div>
+        <div class="metric-tile-label">${label}</div>
+      </div>
+    `).join('');
+
+    if (data.action_distribution) {
+      const dist = data.action_distribution;
+      const total = Object.values(dist).reduce((s, v) => s + v, 0);
+      const distEl = document.getElementById('rlActionDist');
+      distEl.innerHTML = `
+        <div class="panel-label" style="margin:16px 0 10px;">Action Distribution</div>
+        <div style="display:flex;flex-direction:column;gap:7px;max-width:400px;">
+          ${Object.entries(dist).map(([action, count]) => {
+            const pct = (count / total * 100).toFixed(1);
+            const ac = ACTION_COLORS[action] || { fg: '#8897A8', bg: '' };
+            return `
+              <div style="display:grid;grid-template-columns:80px 1fr 50px;align-items:center;gap:10px;">
+                <span class="action-tag action-${action}" style="color:${ac.fg};background:${ac.fg}22;font-size:10px;">${action}</span>
+                <div style="height:5px;background:var(--border-mid);border-radius:3px;overflow:hidden;">
+                  <div style="width:${pct}%;height:100%;background:${ac.fg};opacity:0.7;border-radius:3px;"></div>
+                </div>
+                <span style="font-family:var(--font-data);font-size:11px;color:var(--text-muted);text-align:right;">${pct}%</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+  } catch (e) {
+    panel.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">RL evaluation results not found. Run Phase 4 pipeline.</div>';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PHASE RESULTS TAB
+   ═══════════════════════════════════════════════════════════ */
+async function loadResultsData() {
+  const content = document.getElementById('resultsContent');
+  if (content.innerHTML) return;
+
+  const files = [
+    { label: 'XGBoost Test Metrics (Phase 2)', path: '../results/xgboost_test_metrics.json' },
+    { label: 'Autoencoder Test Metrics (Phase 2)', path: '../results/autoencoder_test_metrics.json' },
+    { label: 'LSTM Test Metrics (Phase 2)', path: '../results/lstm_test_metrics.json' },
+    { label: 'Phase 5 — Zero-Day Results', path: '../results/phase5_zeroday_results.json' },
+    { label: 'Phase 6 — Ablation Study', path: '../results/phase6_ablation.json' },
+    { label: 'DQN Evaluation (Phase 4)', path: '../results/dqn_test_eval.json' },
+  ];
+
+  const fragments = await Promise.all(files.map(async ({ label, path }) => {
+    try {
+      const r = await fetch(path);
+      if (!r.ok) throw new Error();
+      const json = await r.json();
+      return { label, data: JSON.stringify(json, null, 2), ok: true };
+    } catch {
+      return { label, ok: false };
+    }
+  }));
+
+  content.innerHTML = fragments.map(({ label, data, ok }) => `
+    <div class="results-block" style="margin-bottom:10px;">
+      <div class="results-block-header" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.toggle-arrow').textContent=this.nextElementSibling.classList.contains('open')?'▲':'▼'">
+        <span>${ok ? '📄' : '⏳'} ${label}</span>
+        <span class="toggle-arrow">▼</span>
+      </div>
+      <div class="results-block-body">
+        ${ok ? `<pre>${data}</pre>` : `<div style="color:var(--text-muted);font-size:12px;">File not found — run the relevant pipeline phase first.</div>`}
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SIMULATE TAB
+   ═══════════════════════════════════════════════════════════ */
+let categoryInfo = {};
+
+async function loadCategories() {
+  try {
+    const r = await fetch(`${API}/categories`);
+    const data = await r.json();
+    const select = document.getElementById('simCatSelect');
+    select.innerHTML = '';
+
+    const ORDER = ['Normal','Generic','Exploits','DoS','Analysis','Backdoor','Shellcode','Worms','Fuzzers','Reconnaissance'];
+    const byName = {};
+    data.categories.forEach(c => { byName[c.name] = c; categoryInfo[c.name] = c; });
+
+    // Group: Known first, then Unseen
+    const known  = ORDER.filter(n => byName[n] && byName[n].is_known);
+    const unseen = ORDER.filter(n => byName[n] && !byName[n].is_known);
+
+    const grpKnown = document.createElement('optgroup');
+    grpKnown.label = '── Known — Seen in Training';
+    known.forEach(name => {
+      const c = byName[name];
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = `${name} (${c.test_set_count.toLocaleString()} test rows)`;
+      grpKnown.appendChild(opt);
+    });
+
+    const grpUnseen = document.createElement('optgroup');
+    grpUnseen.label = '── Unseen — Held Out (Zero-Day)';
+    unseen.forEach(name => {
+      const c = byName[name];
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = `${name} (${c.test_set_count.toLocaleString()} test rows)`;
+      grpUnseen.appendChild(opt);
+    });
+
+    select.appendChild(grpKnown);
+    select.appendChild(grpUnseen);
+    select.addEventListener('change', updateCatTag);
+    updateCatTag();
+  } catch (e) {
+    document.getElementById('simCatSelect').innerHTML = '<option>API offline</option>';
+  }
+}
+
+function updateCatTag() {
+  const select = document.getElementById('simCatSelect');
+  const cat = select.value;
+  const info = categoryInfo[cat];
+  const tagEl = document.getElementById('simCatTag');
+  if (!info) { tagEl.innerHTML = ''; return; }
+  if (info.is_known) {
+    tagEl.innerHTML = `<span class="cat-tag known">✓ Known — seen in training</span>`;
+  } else {
+    tagEl.innerHTML = `<span class="cat-tag unseen">◉ Unseen — held out (zero-day)</span>`;
+  }
+  if (info.small_sample_warning) {
+    tagEl.innerHTML += ` <span style="font-size:11px;color:var(--sev-medium);margin-left:6px;">⚠ only ${info.test_set_count} test rows</span>`;
+  }
+}
+
+async function runSimulation() {
+  const select = document.getElementById('simCatSelect');
+  const cat = select.value;
+  if (!cat || cat === 'API offline') return;
+
+  const btnRun   = document.getElementById('btnRunSim');
+  const btnAgain = document.getElementById('btnRunAgain');
+  btnRun.disabled = true;
+  btnAgain.disabled = true;
+
+  const area = document.getElementById('simResultArea');
+  area.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px;">
+    <span class="spinner"></span>&nbsp; Sampling row from test set, running restricted pipeline…
+  </div>`;
+
+  try {
+    const r = await fetch(`${API}/simulate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attack_cat: cat }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    renderSimResult(d);
+    addSimHistory(d);
+    simRunCount++;
+    btnRunAgain.disabled = false;
+  } catch (e) {
+    area.innerHTML = `<div style="padding:16px;color:var(--sev-critical);font-size:13px;">Error: ${e.message}</div>`;
+  } finally {
+    btnRun.disabled = false;
+  }
+}
+
+function renderSimResult(d) {
+  const area = document.getElementById('simResultArea');
+  const sev = riskToSev(d.risk_score || 0);
+  const sevInfo = SEV_DISPLAY[sev];
+  const action = d.action_name || 'N/A';
+  const ac = ACTION_COLORS[action] || { fg: '#8897A8', bg: 'rgba(136,151,168,0.12)' };
+  const shap = d.shap_top_features || [];
+
+  const isUnseen = !d.is_known;
+  const verdictOk = d.correctness_ok;
+
+  area.innerHTML = `
+    <div class="sim-results">
+
+      <!-- EVENT -->
+      <div class="sim-panel">
+        <div class="sim-panel-title">Sampled Event</div>
+        <div class="sim-event-grid">
+          <div class="sim-field">
+            <div class="sim-field-label">Category</div>
+            <div class="sim-field-value">${d.true_attack_cat || d.attack_cat || '—'}</div>
+          </div>
+          <div class="sim-field">
+            <div class="sim-field-label">Known / Unseen</div>
+            <div class="sim-field-value" style="margin-top:2px;">
+              ${isUnseen
+                ? '<span class="cat-tag unseen">◉ Unseen — held out</span>'
+                : '<span class="cat-tag known">✓ Known — trained</span>'}
+            </div>
+          </div>
+          <div class="sim-field">
+            <div class="sim-field-label">True Label</div>
+            <div class="sim-field-value" style="color:${d.true_label === 1 ? 'var(--sev-high)' : 'var(--sev-low)'}">
+              ${d.true_label === 1 ? 'Attack' : 'Normal'}
+            </div>
+          </div>
+          <div class="sim-field">
+            <div class="sim-field-label">Test Row Index</div>
+            <div class="sim-field-value">#${d.row_index.toLocaleString()}</div>
+          </div>
+          <div class="sim-field">
+            <div class="sim-field-label">Test Pool Size</div>
+            <div class="sim-field-value">${d.test_set_size.toLocaleString()}</div>
+          </div>
+          <div class="sim-field">
+            <div class="sim-field-label">Incident ID</div>
+            <div class="sim-field-value">#${d.incident_id}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODEL SCORES -->
+      <div class="sim-panel">
+        <div class="sim-panel-title">Model Scores — Restricted Pipeline</div>
+              ${scoreBar('XGBoost', d.xgb_prob, sevInfo.color)}
+        ${scoreBar('Autoencoder', d.ae_score, '#00A3C4')}
+        ${scoreBar('LSTM', d.lstm_prob, '#6B46C1')}
+        ${scoreBar('Uncertainty', d.uncertainty, '#8897A8')}
+      </div>
+
+      <!-- RISK + RL (same row) -->
+      <div class="sim-panel" style="grid-column:1;">
+        <div class="sim-panel-title">Risk Engine</div>
+        <div style="display:flex;gap:24px;align-items:flex-start;">
+          <div class="sim-field">
+            <div class="sim-field-label">R_t</div>
+            <div class="sim-field-value" style="color:${sevInfo.color};font-size:20px;">${d.risk_score.toFixed(4)}</div>
+          </div>
+          <div class="sim-field">
+            <div class="sim-field-label">ΔR</div>
+            <div class="sim-field-value" style="color:${d.risk_delta >= 0 ? 'var(--sev-high)' : 'var(--sev-low)'}">
+              ${d.risk_delta >= 0 ? '↑' : '↓'} ${d.risk_delta >= 0 ? '+' : ''}${d.risk_delta.toFixed(4)}
+            </div>
+          </div>
+          <div class="sim-field">
+            <div class="sim-field-label">H_t</div>
+            <div class="sim-field-value">${d.risk_hist.toFixed(4)}</div>
+          </div>
+          <div style="margin-left:auto;">
+            <div class="rl-big" style="border-color:${ac.fg}44;background:${ac.bg};">
+              <div class="rl-big-action" style="color:${ac.fg}">${action}</div>
+              <div class="rl-big-meta">RL Policy Decision</div>
+              <div class="rl-big-meta">unc ${d.uncertainty.toFixed(4)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SHAP -->
+      <div class="sim-panel" style="grid-column:2;">
+        <div class="sim-panel-title">SHAP — XGBoost Only</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">Does not cover AE or LSTM signals</div>
+        ${shap.length ? shap.map(f => shapBarDetail(f.feature, f.shap_value)).join('') : '<div style="color:var(--text-muted);font-size:12px;">No SHAP data</div>'}
+      </div>
+
+    </div>
+
+    <!-- BOTTOM: Narrative + Verdict -->
+    <div class="sim-bottom" style="margin-top:12px;">
+      <div class="narrative-panel">
+        <div class="sim-panel-title" style="margin-bottom:8px;">System Narrative</div>
+        <div class="narrative-text">${d.narrative || '—'}</div>
+      </div>
+      <div class="verdict-block" style="border-color:${verdictOk ? 'rgba(39,103,73,0.35)' : 'rgba(197,48,48,0.35)'};background:${verdictOk ? 'rgba(39,103,73,0.08)' : 'rgba(197,48,48,0.08)'};">
+        <div class="sim-panel-title">Verdict</div>
+        <div class="verdict-icon">${verdictOk ? '✓' : '✗'}</div>
+        <div class="verdict-text" style="color:${verdictOk ? 'var(--sev-low)' : 'var(--sev-critical)'}">
+          ${d.correctness_verdict || '—'}
+        </div>
+        <div class="verdict-sub">Ground truth: ${d.true_label === 1 ? 'Attack' : 'Normal'}<br>Action taken: ${action}</div>
+      </div>
+    </div>
+  `;
+}
+
+function addSimHistory(d) {
+  simHistory.unshift(d);
+  const histEl = document.getElementById('simHistory');
+  const body = document.getElementById('histBody');
+  histEl.style.display = 'block';
+  body.innerHTML = simHistory.map((d, i) => {
+    const isUnseen = !d.is_known;
+    const ac = ACTION_COLORS[d.action_name] || { fg: '#8897A8', bg: '' };
+    return `
+      <tr style="border-bottom:1px solid var(--border-dim);${i % 2 === 0 ? '' : 'background:var(--bg-elevated)'}">
+        <td style="padding:6px 12px;font-family:var(--font-data);font-size:11px;color:var(--text-muted)">${simHistory.length - i}</td>
+        <td style="padding:6px 12px;font-size:12px;font-weight:500;">${d.attack_cat}</td>
+        <td style="padding:6px 12px;font-family:var(--font-data);font-size:11px;color:var(--text-muted)">#${d.row_index.toLocaleString()}</td>
+        <td style="padding:6px 12px;font-family:var(--font-data);font-size:11px;">${d.risk_score.toFixed(3)}</td>
+        <td style="padding:6px 12px;">
+          <span class="action-tag action-${d.action_name}" style="color:${ac.fg};background:${ac.fg}22">${d.action_name}</span>
+        </td>
+        <td style="padding:6px 12px;font-size:11px;color:${d.correctness_ok ? 'var(--sev-low)' : 'var(--sev-critical)'}">${d.correctness_ok ? '✓' : '✗'} ${d.correctness_verdict}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INIT & POLLING
+   ═══════════════════════════════════════════════════════════ */
+async function init() {
+  initRiskChart();
+  await loadIncidents();
+  await loadCategories();
+  window.addEventListener('resize', drawRiskChart);
+
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get('tab');
+  if (tab) {
+    switchTab(tab);
+    const cat = params.get('cat');
+    if (tab === 'simulate' && cat) {
+      const select = document.getElementById('simCatSelect');
+      if (select && select.querySelector(`option[value="${cat}"]`)) {
+        select.value = cat;
+        updateCatTag();
+        runSimulation();
+      }
+    }
+  }
+}
+
+init();
+setInterval(loadIncidents, REFRESH_MS);
+</script>
+</body>
+</html>

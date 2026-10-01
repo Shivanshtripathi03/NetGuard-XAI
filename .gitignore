@@ -32,6 +32,8 @@ results/*
 !results/*.md
 !results/*.png
 !results/*.csv
+!results/screenshots/
+!results/screenshots/*
 
 # Jupyter
 .ipynb_checkpoints/
